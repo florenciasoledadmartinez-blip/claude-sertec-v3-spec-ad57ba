@@ -1,0 +1,223 @@
+// SERTEC - Circuito de aprobacion de facturas de servicio (circuito B)
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleName {
+  RESPONSABLE_OPERATIVO
+  ANALISTA_CXP
+  COMPRAS
+  GERENCIA
+  TESORERIA
+  ADMIN
+}
+
+enum Periodicidad {
+  MENSUAL
+  QUINCENAL
+  TRIMESTRAL
+  ANUAL
+  POR_EVENTO
+}
+
+enum EstadoPrestacion {
+  PENDIENTE
+  CUMPLIDO
+  PARCIAL
+  NO_CUMPLIDO
+}
+
+enum TipoResolucionParcial {
+  NOTA_CREDITO
+  PAGO_PARCIAL
+  RECHAZADA
+}
+
+enum PrecioEstado {
+  PENDIENTE_CONFIRMAR
+  COINCIDE
+  CONFLICTO
+}
+
+enum ResolutorConflicto {
+  RESPONSABLE_OPERATIVO
+  COMPRAS
+}
+
+model Usuario {
+  id           String   @id @default(cuid())
+  nombre       String
+  email        String   @unique
+  passwordHash String
+  area         String?
+  activo       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  roles UsuarioRol[]
+
+  serviciosResponsable       Servicio[]        @relation("ServicioResponsable")
+  historialPrecioCambios     HistorialPrecio[] @relation("HistorialCambiadoPor")
+  prestacionesValidadas      Prestacion[]      @relation("PrestacionValidadaPor")
+  prestacionesResueltas      Prestacion[]      @relation("PrestacionResueltaPor")
+  facturasRegistradas        Factura[]         @relation("FacturaRegistradaPor")
+  facturasRechazadasPrecio   Factura[]         @relation("FacturaRechazadaPrecioPor")
+  facturasRechazadasGerencia Factura[]         @relation("FacturaRechazadaGerenciaPor")
+  facturasAutorizadas        Factura[]         @relation("FacturaAutorizadaPor")
+  facturasPagadas            Factura[]         @relation("FacturaPagadaPor")
+  auditoria                  Auditoria[]
+}
+
+model UsuarioRol {
+  id        String   @id @default(cuid())
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  role      RoleName
+
+  @@unique([usuarioId, role])
+}
+
+model Servicio {
+  id                     String       @id @default(cuid())
+  proveedor              String
+  cuit                   String
+  area                   String
+  descripcion            String
+  responsableOperativoId String
+  responsableOperativo   Usuario      @relation("ServicioResponsable", fields: [responsableOperativoId], references: [id])
+  precioVigente          Decimal      @db.Decimal(14, 2)
+  periodicidad           Periodicidad
+  actualizacionFrecuencia String?
+  actualizacionBase      String?
+  vigenteDesde           DateTime
+  activo                 Boolean      @default(true)
+  duracionEnPeriodos     Int?
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  historialPrecio HistorialPrecio[]
+  prestaciones    Prestacion[]
+  facturas        Factura[]
+}
+
+model HistorialPrecio {
+  id             String   @id @default(cuid())
+  servicioId     String
+  servicio       Servicio @relation(fields: [servicioId], references: [id])
+  precioAnterior Decimal  @db.Decimal(14, 2)
+  precioNuevo    Decimal  @db.Decimal(14, 2)
+  motivo         String
+  cambiadoPorId  String
+  cambiadoPor    Usuario  @relation("HistorialCambiadoPor", fields: [cambiadoPorId], references: [id])
+  fecha          DateTime @default(now())
+}
+
+model Prestacion {
+  id                 String           @id @default(cuid())
+  servicioId         String
+  servicio           Servicio         @relation(fields: [servicioId], references: [id])
+  periodo            String
+  estado             EstadoPrestacion @default(PENDIENTE)
+  validadoPorId      String?
+  validadoPor        Usuario?         @relation("PrestacionValidadaPor", fields: [validadoPorId], references: [id])
+  fecha              DateTime?
+  observacion        String?
+  creadoManualmente  Boolean          @default(false)
+
+  resolucionParcialTipo            TipoResolucionParcial?
+  resolucionParcialDetalle         String?
+  resolucionParcialImporteAjustado Decimal?                @db.Decimal(14, 2)
+  resolucionParcialResueltoPorId   String?
+  resolucionParcialResueltoPor     Usuario?                @relation("PrestacionResueltaPor", fields: [resolucionParcialResueltoPorId], references: [id])
+  resolucionParcialFecha           DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  facturaPeriodos FacturaPeriodo[]
+
+  @@unique([servicioId, periodo])
+}
+
+model Factura {
+  id                String   @id @default(cuid())
+  servicioId        String
+  servicio          Servicio @relation(fields: [servicioId], references: [id])
+  periodoAConfirmar Boolean  @default(false)
+  numeroFactura     String
+  fechaFactura      DateTime
+  importeFacturado  Decimal  @db.Decimal(14, 2)
+  fechaRegistro     DateTime @default(now())
+  registradoPorId   String
+  registradoPor     Usuario  @relation("FacturaRegistradaPor", fields: [registradoPorId], references: [id])
+
+  precioEstado PrecioEstado @default(PENDIENTE_CONFIRMAR)
+
+  rechazadaPrecio       Boolean   @default(false)
+  rechazadaPrecioMotivo String?
+  rechazadaPrecioPorId  String?
+  rechazadaPrecioPor    Usuario?  @relation("FacturaRechazadaPrecioPor", fields: [rechazadaPrecioPorId], references: [id])
+  rechazadaPrecioFecha  DateTime?
+
+  rechazadaGerencia       Boolean   @default(false)
+  rechazadaGerenciaMotivo String?
+  rechazadaGerenciaPorId  String?
+  rechazadaGerenciaPor    Usuario?  @relation("FacturaRechazadaGerenciaPor", fields: [rechazadaGerenciaPorId], references: [id])
+  rechazadaGerenciaFecha  DateTime?
+
+  autorizado       Boolean   @default(false)
+  autorizadoPorId  String?
+  autorizadoPor    Usuario?  @relation("FacturaAutorizadaPor", fields: [autorizadoPorId], references: [id])
+  autorizadoFecha  DateTime?
+
+  pagado           Boolean   @default(false)
+  comprobanteNumero String?
+  comprobanteFecha  DateTime?
+  pagadoPorId       String?
+  pagadoPor         Usuario?  @relation("FacturaPagadaPor", fields: [pagadoPorId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  periodos FacturaPeriodo[]
+
+  @@unique([servicioId, numeroFactura])
+}
+
+model FacturaPeriodo {
+  id           String     @id @default(cuid())
+  facturaId    String
+  factura      Factura    @relation(fields: [facturaId], references: [id], onDelete: Cascade)
+  prestacionId String
+  prestacion   Prestacion @relation(fields: [prestacionId], references: [id])
+
+  @@unique([facturaId, prestacionId])
+}
+
+model Auditoria {
+  id          String   @id @default(cuid())
+  usuarioId   String?
+  usuario     Usuario? @relation(fields: [usuarioId], references: [id])
+  fecha       DateTime @default(now())
+  entidadTipo String
+  entidadId   String
+  accion      String
+  detalle     String?
+}
+
+model ConfigSistema {
+  id                         Int                @id @default(1)
+  resolutorConflictoPrecio   ResolutorConflicto @default(RESPONSABLE_OPERATIVO)
+  slaConflictoPrecioDias     Int                @default(3)
+  slaCumplimientoParcialDias Int                @default(5)
+  slaPeriodoAConfirmarDias   Int                @default(2)
+  presupuestoContratoActivo  Boolean            @default(false)
+  fechaCorte                 DateTime           @default("2026-04-01T00:00:00.000Z")
+  updatedAt                  DateTime           @updatedAt
+}
