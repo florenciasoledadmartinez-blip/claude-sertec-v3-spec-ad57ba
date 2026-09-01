@@ -54,7 +54,7 @@ export async function registrarFacturaAction(_prev: ActionState, formData: FormD
     if (!confirmarDuplicado) {
       const duplicados = await buscarPeriodosDuplicados(data.periodoIds);
       if (duplicados.length > 0) {
-        return { warning: mensajeDuplicados(duplicados) };
+        return { warning: mensajeDuplicados(duplicados), valores: data };
       }
     }
   }
@@ -130,7 +130,7 @@ export async function editarFacturaAction(_prev: ActionState, formData: FormData
     if (!confirmarDuplicado) {
       const duplicados = await buscarPeriodosDuplicados(data.periodoIds, facturaId);
       if (duplicados.length > 0) {
-        return { warning: mensajeDuplicados(duplicados) };
+        return { warning: mensajeDuplicados(duplicados), valores: data };
       }
     }
   }

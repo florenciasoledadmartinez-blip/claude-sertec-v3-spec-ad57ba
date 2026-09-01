@@ -37,12 +37,25 @@ export function FacturaForm({
   submitLabelPendiente?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
+
+  // Si el navegador hizo un submit "nativo" (sin JS todavía hidratado) para resolver la
+  // advertencia de período duplicado, este componente se re-monta desde cero en la página
+  // nueva. En ese caso, Next.js igual entrega el `state` devuelto por la server action, así
+  // que usamos los valores que el usuario ya había cargado (`state.valores`) como punto de
+  // partida en vez de perderlos.
+  const valoresEco = state?.valores as
+    | { numeroFactura?: string; fechaFactura?: string; importeFacturado?: number | string; periodoModo?: "periodos" | "a_confirmar"; periodoIds?: string[] }
+    | undefined;
+  const valoresIniciales = valoresEco ?? defaults;
+
   const [servicioId, setServicioId] = useState(servicioFijo?.id ?? servicios[0]?.id ?? "");
-  const [modo, setModo] = useState<"periodos" | "a_confirmar">(defaults?.periodoModo ?? "periodos");
-  const [numeroFactura, setNumeroFactura] = useState(defaults?.numeroFactura ?? "");
-  const [fechaFactura, setFechaFactura] = useState(defaults?.fechaFactura ?? "");
-  const [importeFacturado, setImporteFacturado] = useState(String(defaults?.importeFacturado ?? ""));
-  const [periodoIdsElegidos, setPeriodoIdsElegidos] = useState<Set<string>>(new Set(defaults?.periodoIds ?? []));
+  const [modo, setModo] = useState<"periodos" | "a_confirmar">(valoresIniciales?.periodoModo ?? "periodos");
+  const [numeroFactura, setNumeroFactura] = useState(valoresIniciales?.numeroFactura ?? "");
+  const [fechaFactura, setFechaFactura] = useState(valoresIniciales?.fechaFactura ?? "");
+  const [importeFacturado, setImporteFacturado] = useState(String(valoresIniciales?.importeFacturado ?? ""));
+  const [periodoIdsElegidos, setPeriodoIdsElegidos] = useState<Set<string>>(
+    new Set(valoresIniciales?.periodoIds ?? [])
+  );
 
   const servicio = useMemo(() => servicios.find((s) => s.id === servicioId), [servicios, servicioId]);
 
