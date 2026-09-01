@@ -39,9 +39,21 @@ export function FacturaForm({
   const [state, formAction, pending] = useActionState(action, undefined);
   const [servicioId, setServicioId] = useState(servicioFijo?.id ?? servicios[0]?.id ?? "");
   const [modo, setModo] = useState<"periodos" | "a_confirmar">(defaults?.periodoModo ?? "periodos");
-  const periodoIdsDefault = useMemo(() => new Set(defaults?.periodoIds ?? []), [defaults?.periodoIds]);
+  const [numeroFactura, setNumeroFactura] = useState(defaults?.numeroFactura ?? "");
+  const [fechaFactura, setFechaFactura] = useState(defaults?.fechaFactura ?? "");
+  const [importeFacturado, setImporteFacturado] = useState(String(defaults?.importeFacturado ?? ""));
+  const [periodoIdsElegidos, setPeriodoIdsElegidos] = useState<Set<string>>(new Set(defaults?.periodoIds ?? []));
 
   const servicio = useMemo(() => servicios.find((s) => s.id === servicioId), [servicios, servicioId]);
+
+  function togglePeriodo(id: string) {
+    setPeriodoIdsElegidos((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -79,7 +91,8 @@ export function FacturaForm({
           <input
             name="numeroFactura"
             required
-            defaultValue={defaults?.numeroFactura}
+            value={numeroFactura}
+            onChange={(e) => setNumeroFactura(e.target.value)}
             className="rounded-md border border-slate-300 px-3 py-2 text-sm"
           />
         </div>
@@ -89,7 +102,8 @@ export function FacturaForm({
             name="fechaFactura"
             type="date"
             required
-            defaultValue={defaults?.fechaFactura}
+            value={fechaFactura}
+            onChange={(e) => setFechaFactura(e.target.value)}
             className="rounded-md border border-slate-300 px-3 py-2 text-sm"
           />
         </div>
@@ -101,7 +115,8 @@ export function FacturaForm({
             step="0.01"
             min="0"
             required
-            defaultValue={defaults?.importeFacturado}
+            value={importeFacturado}
+            onChange={(e) => setImporteFacturado(e.target.value)}
             className="rounded-md border border-slate-300 px-3 py-2 text-sm"
           />
         </div>
@@ -136,7 +151,13 @@ export function FacturaForm({
             {servicio && servicio.prestaciones.length > 0 ? (
               servicio.prestaciones.map((p) => (
                 <label key={p.id} className="flex items-center gap-2 text-sm text-slate-700">
-                  <input type="checkbox" name="periodoIds" value={p.id} defaultChecked={periodoIdsDefault.has(p.id)} />
+                  <input
+                    type="checkbox"
+                    name="periodoIds"
+                    value={p.id}
+                    checked={periodoIdsElegidos.has(p.id)}
+                    onChange={() => togglePeriodo(p.id)}
+                  />
                   {p.periodo}{" "}
                   <span className="text-xs text-slate-400">({p.estado.toLowerCase()})</span>
                 </label>
