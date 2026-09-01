@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useMemo, useState } from "react";
-import { registrarFacturaAction } from "@/actions/facturas";
+import type { ActionState } from "@/actions/servicios";
 
 type Servicio = {
   id: string;
@@ -10,39 +10,88 @@ type Servicio = {
   prestaciones: { id: string; periodo: string; estado: string }[];
 };
 
-export function FacturaForm({ servicios }: { servicios: Servicio[] }) {
-  const [state, formAction, pending] = useActionState(registrarFacturaAction, undefined);
-  const [servicioId, setServicioId] = useState(servicios[0]?.id ?? "");
-  const [modo, setModo] = useState<"periodos" | "a_confirmar">("periodos");
+type Defaults = {
+  numeroFactura?: string;
+  fechaFactura?: string;
+  importeFacturado?: number | string;
+  periodoModo?: "periodos" | "a_confirmar";
+  periodoIds?: string[];
+};
+
+export function FacturaForm({
+  servicios,
+  action,
+  facturaId,
+  defaults,
+  servicioFijo,
+  submitLabel = "Registrar factura",
+  submitLabelPendiente = "Registrando...",
+}: {
+  servicios: Servicio[];
+  action: (state: ActionState, formData: FormData) => Promise<ActionState>;
+  facturaId?: string;
+  defaults?: Defaults;
+  /** Si se pasa, el servicio queda fijo (modo edicion) y no se puede elegir otro. */
+  servicioFijo?: { id: string; proveedor: string; descripcion: string };
+  submitLabel?: string;
+  submitLabelPendiente?: string;
+}) {
+  const [state, formAction, pending] = useActionState(action, undefined);
+  const [servicioId, setServicioId] = useState(servicioFijo?.id ?? servicios[0]?.id ?? "");
+  const [modo, setModo] = useState<"periodos" | "a_confirmar">(defaults?.periodoModo ?? "periodos");
+  const periodoIdsDefault = useMemo(() => new Set(defaults?.periodoIds ?? []), [defaults?.periodoIds]);
 
   const servicio = useMemo(() => servicios.find((s) => s.id === servicioId), [servicios, servicioId]);
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
+      {facturaId && <input type="hidden" name="facturaId" value={facturaId} />}
+      <input type="hidden" name="confirmarDuplicado" value={state?.warning ? "true" : "false"} />
+
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-slate-700">Servicio</label>
-        <select
-          name="servicioId"
-          value={servicioId}
-          onChange={(e) => setServicioId(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-        >
-          {servicios.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.proveedor} — {s.descripcion}
-            </option>
-          ))}
-        </select>
+        {servicioFijo ? (
+          <>
+            <div className="rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-600">
+              {servicioFijo.proveedor} — {servicioFijo.descripcion}
+            </div>
+            <input type="hidden" name="servicioId" value={servicioFijo.id} />
+          </>
+        ) : (
+          <select
+            name="servicioId"
+            value={servicioId}
+            onChange={(e) => setServicioId(e.target.value)}
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          >
+            {servicios.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.proveedor} — {s.descripcion}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-slate-700">Número de factura</label>
-          <input name="numeroFactura" required className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+          <input
+            name="numeroFactura"
+            required
+            defaultValue={defaults?.numeroFactura}
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-slate-700">Fecha de factura</label>
-          <input name="fechaFactura" type="date" required className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+          <input
+            name="fechaFactura"
+            type="date"
+            required
+            defaultValue={defaults?.fechaFactura}
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-slate-700">Importe facturado (ARS)</label>
@@ -52,6 +101,7 @@ export function FacturaForm({ servicios }: { servicios: Servicio[] }) {
             step="0.01"
             min="0"
             required
+            defaultValue={defaults?.importeFacturado}
             className="rounded-md border border-slate-300 px-3 py-2 text-sm"
           />
         </div>
@@ -86,7 +136,7 @@ export function FacturaForm({ servicios }: { servicios: Servicio[] }) {
             {servicio && servicio.prestaciones.length > 0 ? (
               servicio.prestaciones.map((p) => (
                 <label key={p.id} className="flex items-center gap-2 text-sm text-slate-700">
-                  <input type="checkbox" name="periodoIds" value={p.id} />
+                  <input type="checkbox" name="periodoIds" value={p.id} defaultChecked={periodoIdsDefault.has(p.id)} />
                   {p.periodo}{" "}
                   <span className="text-xs text-slate-400">({p.estado.toLowerCase()})</span>
                 </label>
@@ -99,13 +149,16 @@ export function FacturaForm({ servicios }: { servicios: Servicio[] }) {
       </div>
 
       {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
+      {state?.warning && (
+        <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">{state.warning}</p>
+      )}
 
       <button
         type="submit"
         disabled={pending}
         className="mt-2 w-fit rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
       >
-        {pending ? "Registrando..." : "Registrar factura"}
+        {pending ? submitLabelPendiente : state?.warning ? "Registrar de todas formas" : submitLabel}
       </button>
     </form>
   );

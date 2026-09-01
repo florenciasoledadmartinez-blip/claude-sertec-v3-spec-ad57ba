@@ -195,3 +195,58 @@ export async function reabrirPrestacionAction(_prev: ActionState, formData: Form
   revalidatePath("/admin/periodos");
   return { success: "Período reabierto." };
 }
+
+export async function reabrirFacturaRechazadaAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const admin = await requireRole("ADMIN");
+  const facturaId = String(formData.get("facturaId") ?? "");
+  const tipo = String(formData.get("tipo") ?? "");
+  const motivo = String(formData.get("motivo") ?? "").trim();
+
+  if (!["precio", "gerencia"].includes(tipo)) return { error: "Tipo de reapertura inválido." };
+  if (!motivo) return { error: "El motivo es obligatorio para reabrir una factura rechazada." };
+
+  const factura = await prisma.factura.findUnique({ where: { id: facturaId } });
+  if (!factura) return { error: "Factura no encontrada." };
+
+  if (tipo === "precio" && !factura.rechazadaPrecio) {
+    return { error: "Esta factura no está rechazada por precio." };
+  }
+  if (tipo === "gerencia" && !factura.rechazadaGerencia) {
+    return { error: "Esta factura no fue rechazada por Gerencia." };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.factura.update({
+      where: { id: facturaId },
+      data:
+        tipo === "precio"
+          ? {
+              rechazadaPrecio: false,
+              rechazadaPrecioMotivo: null,
+              rechazadaPrecioPorId: null,
+              rechazadaPrecioFecha: null,
+              precioEstado: "PENDIENTE_CONFIRMAR",
+            }
+          : {
+              rechazadaGerencia: false,
+              rechazadaGerenciaMotivo: null,
+              rechazadaGerenciaPorId: null,
+              rechazadaGerenciaFecha: null,
+            },
+    });
+    await registrarAuditoria(
+      {
+        usuarioId: admin.id,
+        entidadTipo: "factura",
+        entidadId: facturaId,
+        accion: tipo === "precio" ? "REAPERTURA_RECHAZO_PRECIO" : "REAPERTURA_RECHAZO_GERENCIA",
+        detalle: motivo,
+      },
+      tx
+    );
+  });
+
+  revalidatePath("/admin/rechazadas");
+  revalidatePath(`/facturas/${facturaId}`);
+  return { success: "Factura reabierta." };
+}

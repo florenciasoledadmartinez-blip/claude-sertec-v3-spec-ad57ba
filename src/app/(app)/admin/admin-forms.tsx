@@ -9,6 +9,7 @@ import {
   actualizarConfigAction,
   generarPeriodosAction,
   reabrirPrestacionAction,
+  reabrirFacturaRechazadaAction,
 } from "@/actions/admin";
 import { importarDatosAction } from "@/actions/importar";
 
@@ -210,6 +211,31 @@ export function ImportarForm() {
       <button type="submit" disabled={pending} className="w-fit rounded-md bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-600 disabled:opacity-50">
         {pending ? "Importando..." : "Reemplazar datos"}
       </button>
+    </form>
+  );
+}
+
+export function ReabrirFacturaForm({ facturaId, tipo }: { facturaId: string; tipo: "precio" | "gerencia" }) {
+  const [state, formAction, pending] = useActionState(reabrirFacturaRechazadaAction, undefined);
+  return (
+    <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-md border border-slate-200 p-3">
+      <input type="hidden" name="facturaId" value={facturaId} />
+      <input type="hidden" name="tipo" value={tipo} />
+      <input
+        name="motivo"
+        placeholder="Motivo de la reapertura (obligatorio)"
+        required
+        className="min-w-[240px] flex-1 rounded-md border border-slate-300 px-2 py-1.5 text-xs"
+      />
+      <button
+        type="submit"
+        disabled={pending}
+        className="rounded-md border border-slate-300 px-3 py-1.5 text-xs hover:bg-slate-50 disabled:opacity-50"
+      >
+        {pending ? "Reabriendo..." : "Reabrir factura"}
+      </button>
+      {state?.error && <p className="w-full text-xs text-red-600">{state.error}</p>}
+      {state?.success && <p className="w-full text-xs text-emerald-600">{state.success}</p>}
     </form>
   );
 }

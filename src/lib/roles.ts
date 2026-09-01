@@ -37,6 +37,7 @@ export const NAV_BY_ROLE: Record<RoleName, { href: string; label: string }[]> = 
     { href: "/admin/usuarios", label: "Usuarios" },
     { href: "/admin/config", label: "Configuración" },
     { href: "/admin/periodos", label: "Generar períodos" },
+    { href: "/admin/rechazadas", label: "Facturas rechazadas" },
     { href: "/admin/importar", label: "Importación" },
     { href: "/admin/auditoria", label: "Trazabilidad" },
   ],

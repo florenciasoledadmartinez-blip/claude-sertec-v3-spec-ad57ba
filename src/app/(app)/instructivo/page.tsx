@@ -117,6 +117,19 @@ export default function InstructivoPage() {
           anterior como pasaba antes.
         </p>
       </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-6">
+        <h2 className="mb-2 font-medium text-slate-900">
+          ¿Rechazar o dejar pendiente? (Gerencia y control de precio)
+        </h2>
+        <p className="text-sm text-slate-600">
+          &quot;Rechazar&quot; es una decisión terminal: la factura queda marcada como rechazada y no avanza sola.
+          Si lo que se necesita es postergar la decisión unos días (por ejemplo, esperar caja), no hace falta
+          rechazar nada — alcanza con no tocar la factura, que sigue esperando en la cola de quien tiene que
+          actuar. Una factura rechazada por error se puede reabrir desde Administrador → Facturas rechazadas, con
+          motivo y queda registrado en la auditoría.
+        </p>
+      </section>
     </div>
   );
 }

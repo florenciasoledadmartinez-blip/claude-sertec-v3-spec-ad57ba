@@ -14,6 +14,7 @@ import {
   AutorizarButton,
   RechazarGerenciaForm,
   MarcarPagadaForm,
+  EliminarFacturaButton,
 } from "../factura-actions";
 
 const ESTADO_PRESTACION_LABEL: Record<string, string> = {
@@ -66,7 +67,20 @@ export default async function FacturaDetailPage({ params }: { params: Promise<{ 
             — {factura.servicio.descripcion}
           </p>
         </div>
-        <EstadoBadge estado={factura.estado} />
+        <div className="flex items-center gap-3">
+          <EstadoBadge estado={factura.estado} />
+          {hasRole(user, "ANALISTA_CXP") && !factura.autorizado && !factura.pagado && (
+            <>
+              <Link
+                href={`/facturas/${factura.id}/editar`}
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Editar
+              </Link>
+              <EliminarFacturaButton facturaId={factura.id} />
+            </>
+          )}
+        </div>
       </div>
 
       <section className="grid grid-cols-1 gap-4 rounded-lg border border-slate-200 bg-white p-6 sm:grid-cols-4">

@@ -1,5 +1,6 @@
 import { requireRole } from "@/lib/dal";
 import { prisma } from "@/lib/db";
+import { registrarFacturaAction } from "@/actions/facturas";
 import { FacturaForm } from "../factura-form";
 
 export default async function NuevaFacturaPage() {
@@ -21,7 +22,7 @@ export default async function NuevaFacturaPage() {
         </p>
       </div>
       <div className="rounded-lg border border-slate-200 bg-white p-6">
-        <FacturaForm servicios={servicios} />
+        <FacturaForm servicios={servicios} action={registrarFacturaAction} />
       </div>
     </div>
   );

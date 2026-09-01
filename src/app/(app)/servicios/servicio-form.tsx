@@ -25,6 +25,7 @@ export function ServicioForm({
   currentUserId,
   defaults,
   mostrarResponsable = true,
+  responsableEditable = true,
   servicioId,
   precioBloqueado = false,
   submitLabel = "Guardar",
@@ -33,7 +34,10 @@ export function ServicioForm({
   responsables: ResponsableOption[];
   currentUserId: string;
   defaults?: Defaults;
+  /** Si se muestra el campo "Responsable operativo" (false en edicion: no se puede reasignar). */
   mostrarResponsable?: boolean;
+  /** Si el responsable se elige de una lista (admin) o queda fijo en el usuario actual. */
+  responsableEditable?: boolean;
   servicioId?: string;
   precioBloqueado?: boolean;
   submitLabel?: string;
@@ -48,22 +52,31 @@ export function ServicioForm({
         <Field label="Proveedor" name="proveedor" defaultValue={defaults?.proveedor} required />
         <Field label="CUIT" name="cuit" defaultValue={defaults?.cuit} required />
         <Field label="Área" name="area" defaultValue={defaults?.area} required />
-        {mostrarResponsable ? (
+        {mostrarResponsable && (
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-slate-700">Responsable operativo</label>
-            <select
-              name="responsableOperativoId"
-              defaultValue={defaults?.responsableOperativoId ?? currentUserId}
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-            >
-              {responsables.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.id === currentUserId ? `${r.nombre} (vos)` : r.nombre}
-                </option>
-              ))}
-            </select>
+            {responsableEditable ? (
+              <select
+                name="responsableOperativoId"
+                defaultValue={defaults?.responsableOperativoId ?? currentUserId}
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              >
+                {responsables.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.id === currentUserId ? `${r.nombre} (vos)` : r.nombre}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <>
+                <div className="rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-600">
+                  {responsables.find((r) => r.id === currentUserId)?.nombre ?? "Vos"}
+                </div>
+                <input type="hidden" name="responsableOperativoId" value={currentUserId} />
+              </>
+            )}
           </div>
-        ) : null}
+        )}
       </div>
 
       <Field label="Descripción" name="descripcion" defaultValue={defaults?.descripcion} required textarea />

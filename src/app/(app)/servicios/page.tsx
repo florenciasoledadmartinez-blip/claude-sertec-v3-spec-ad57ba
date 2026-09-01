@@ -1,14 +1,26 @@
 import Link from "next/link";
 import { requireRole, hasRole } from "@/lib/dal";
 import { prisma } from "@/lib/db";
+import { Prisma } from "@/generated/prisma/client";
 import { formatMoneda, formatFecha } from "@/lib/format";
 import { periodoLabel } from "@/lib/periodos";
 
-export default async function ServiciosPage() {
+export default async function ServiciosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ proveedor?: string; estado?: string; periodicidad?: string }>;
+}) {
   const user = await requireRole("RESPONSABLE_OPERATIVO");
+  const sp = await searchParams;
+
+  const where: Prisma.ServicioWhereInput = hasRole(user, "ADMIN") ? {} : { responsableOperativoId: user.id };
+  if (sp.proveedor) where.proveedor = { contains: sp.proveedor, mode: "insensitive" };
+  if (sp.estado === "activo") where.activo = true;
+  if (sp.estado === "baja") where.activo = false;
+  if (sp.periodicidad) where.periodicidad = sp.periodicidad as Prisma.EnumPeriodicidadFilter["equals"];
 
   const servicios = await prisma.servicio.findMany({
-    where: hasRole(user, "ADMIN") ? {} : { responsableOperativoId: user.id },
+    where,
     include: { responsableOperativo: true, prestaciones: { where: { estado: "PENDIENTE" } } },
     orderBy: [{ activo: "desc" }, { proveedor: "asc" }],
   });
@@ -27,6 +39,38 @@ export default async function ServiciosPage() {
           Nuevo servicio
         </Link>
       </div>
+
+      <form className="flex flex-wrap gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm">
+        <input
+          name="proveedor"
+          defaultValue={sp.proveedor ?? ""}
+          placeholder="Buscar por proveedor..."
+          className="rounded-md border border-slate-300 px-2 py-1.5"
+        />
+        <select name="estado" defaultValue={sp.estado ?? ""} className="rounded-md border border-slate-300 px-2 py-1.5">
+          <option value="">Estado: todos</option>
+          <option value="activo">Activo</option>
+          <option value="baja">Dado de baja</option>
+        </select>
+        <select
+          name="periodicidad"
+          defaultValue={sp.periodicidad ?? ""}
+          className="rounded-md border border-slate-300 px-2 py-1.5"
+        >
+          <option value="">Periodicidad: todas</option>
+          <option value="MENSUAL">Mensual</option>
+          <option value="QUINCENAL">Quincenal</option>
+          <option value="TRIMESTRAL">Trimestral</option>
+          <option value="ANUAL">Anual</option>
+          <option value="POR_EVENTO">Por evento</option>
+        </select>
+        <button type="submit" className="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-50">
+          Filtrar
+        </button>
+        <Link href="/servicios" className="rounded-md px-3 py-1.5 text-slate-500 hover:underline">
+          Limpiar
+        </Link>
+      </form>
 
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table className="w-full text-sm">
@@ -77,7 +121,8 @@ export default async function ServiciosPage() {
             {servicios.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-4 py-6 text-center text-slate-400">
-                  Todavía no tenés servicios cargados. Fecha de vigencia sugerida: {formatFecha(new Date("2026-04-01"))} en adelante.
+                  No hay servicios que coincidan con el filtro. Fecha de vigencia sugerida:{" "}
+                  {formatFecha(new Date("2026-04-01"))} en adelante.
                 </td>
               </tr>
             )}

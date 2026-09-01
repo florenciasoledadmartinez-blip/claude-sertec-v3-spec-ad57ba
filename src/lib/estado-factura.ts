@@ -70,6 +70,26 @@ export interface FacturaParaEstado {
  * Motor de estados de la factura (spec 4.1). El orden de evaluacion es la regla de negocio:
  * nunca se guarda como campo editable a mano, siempre se deriva de los datos subyacentes.
  */
+/** A quien le toca resolver cada tipo de excepcion, dado el resolutor de precio configurado. */
+export function responsableExcepcion(
+  estado: EstadoFacturaCode,
+  resolutorConflictoPrecio: "RESPONSABLE_OPERATIVO" | "COMPRAS"
+): string {
+  switch (estado) {
+    case "PERIODO_A_CONFIRMAR":
+    case "PENDIENTE_VALIDAR_PRESTACION":
+      return "Responsable operativo";
+    case "CONFLICTO_PARCIAL":
+      return "Compras";
+    case "CONFLICTO_PRECIO":
+      return resolutorConflictoPrecio === "COMPRAS" ? "Compras" : "Responsable operativo";
+    case "CONFLICTO_PRESUPUESTO":
+      return "Responsable operativo / Compras";
+    default:
+      return "—";
+  }
+}
+
 export function computeEstadoFactura(
   factura: FacturaParaEstado,
   opts: { presupuestoActivo: boolean; saldoPresupuestoInsuficiente?: boolean } = {

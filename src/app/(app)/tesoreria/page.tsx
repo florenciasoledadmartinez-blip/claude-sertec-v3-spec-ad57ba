@@ -1,20 +1,55 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/dal";
-import { cargarFacturasConEstado } from "@/lib/facturas-query";
+import { getPendientesDePago } from "@/lib/reportes";
 import { formatMoneda, formatFecha } from "@/lib/format";
 import { MarcarPagadaForm } from "../facturas/factura-actions";
 
-export default async function TesoreriaPage() {
+export default async function TesoreriaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ proveedor?: string }>;
+}) {
   await requireRole("TESORERIA");
+  const { proveedor } = await searchParams;
 
-  const facturas = await cargarFacturasConEstado({});
-  const pendientes = facturas.filter((f) => f.estado === "AUTORIZADA_PENDIENTE_PAGO");
+  const { facturas: pendientes, total, cantidad } = await getPendientesDePago(proveedor);
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Pendientes de pago</h1>
-        <p className="text-slate-500">Facturas autorizadas por Gerencia, esperando el pago.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Pendientes de pago</h1>
+          <p className="text-slate-500">Facturas autorizadas por Gerencia, esperando el pago.</p>
+        </div>
+        <a
+          href={`/api/reportes/pendientes-pago${proveedor ? `?proveedor=${encodeURIComponent(proveedor)}` : ""}`}
+          className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Exportar Excel
+        </a>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-4 rounded-lg border border-slate-200 bg-white p-4">
+        <div className="text-sm text-slate-500">
+          <span className="text-2xl font-semibold text-slate-900">{cantidad}</span> factura{cantidad === 1 ? "" : "s"}{" "}
+          por {formatMoneda(total)}
+        </div>
+        <form className="ml-auto flex gap-2">
+          <input
+            name="proveedor"
+            defaultValue={proveedor ?? ""}
+            placeholder="Filtrar por proveedor..."
+            className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+          />
+          <button type="submit" className="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">
+            Filtrar
+          </button>
+          {proveedor && (
+            <Link href="/tesoreria" className="rounded-md px-3 py-1.5 text-sm text-slate-500 hover:underline">
+              Limpiar
+            </Link>
+          )}
+        </form>
       </div>
 
       <div className="flex flex-col gap-4">

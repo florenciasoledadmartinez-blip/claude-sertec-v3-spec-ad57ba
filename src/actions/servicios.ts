@@ -8,7 +8,7 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { tieneExcepcionPrecioAbierta } from "@/lib/excepciones";
 import { ServicioSchema, CertificacionSchema } from "@/lib/validations";
 
-export type ActionState = { error?: string; success?: string } | undefined;
+export type ActionState = { error?: string; success?: string; warning?: string } | undefined;
 
 export async function crearServicioAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireRole("RESPONSABLE_OPERATIVO");

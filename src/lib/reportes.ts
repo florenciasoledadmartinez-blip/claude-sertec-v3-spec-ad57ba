@@ -1,7 +1,7 @@
 import "server-only";
 import { cargarFacturasConEstado, type FacturaConEstado } from "@/lib/facturas-query";
 import { getConfigSistema } from "@/lib/config";
-import { ESTADOS_EXCEPCION, ESTADO_FACTURA_LABEL, type EstadoFacturaCode } from "@/lib/estado-factura";
+import { ESTADOS_EXCEPCION, ESTADO_FACTURA_LABEL, responsableExcepcion } from "@/lib/estado-factura";
 import { diasHabilesDesde, diasHabilesTranscurridos } from "@/lib/format";
 import { prisma } from "@/lib/db";
 
@@ -15,22 +15,6 @@ export type FilaExcepcion = {
   observacion: string;
   fechaLimite: Date | null;
 };
-
-function responsableDe(estado: EstadoFacturaCode, resolutorPrecio: string) {
-  switch (estado) {
-    case "PERIODO_A_CONFIRMAR":
-    case "PENDIENTE_VALIDAR_PRESTACION":
-      return "Responsable operativo";
-    case "CONFLICTO_PARCIAL":
-      return "Compras";
-    case "CONFLICTO_PRECIO":
-      return resolutorPrecio === "COMPRAS" ? "Compras" : "Responsable operativo";
-    case "CONFLICTO_PRESUPUESTO":
-      return "Responsable operativo / Compras";
-    default:
-      return "—";
-  }
-}
 
 export async function getReporteExcepciones(): Promise<FilaExcepcion[]> {
   const config = await getConfigSistema();
@@ -52,7 +36,7 @@ export async function getReporteExcepciones(): Promise<FilaExcepcion[]> {
       numeroFactura: f.numeroFactura,
       tipoExcepcion: ESTADO_FACTURA_LABEL[f.estado],
       diasAbierta: dias,
-      responsable: responsableDe(f.estado, config.resolutorConflictoPrecio),
+      responsable: responsableExcepcion(f.estado, config.resolutorConflictoPrecio),
       observacion: observacionPeriodo ?? "",
       fechaLimite: sla != null ? diasHabilesDesde(f.fechaRegistro, sla) : null,
     };
@@ -76,4 +60,19 @@ export async function getReporteConciliacion(desde?: Date, hasta?: Date) {
     orderBy: { autorizadoFecha: "asc" },
   });
   return facturas;
+}
+
+/** Facturas autorizadas por Gerencia, esperando el pago de Tesorería. */
+export async function getPendientesDePago(proveedor?: string) {
+  const facturas = await prisma.factura.findMany({
+    where: {
+      autorizado: true,
+      pagado: false,
+      ...(proveedor ? { servicio: { proveedor: { contains: proveedor, mode: "insensitive" } } } : {}),
+    },
+    include: { servicio: true, autorizadoPor: true },
+    orderBy: { autorizadoFecha: "asc" },
+  });
+  const total = facturas.reduce((acc, f) => acc + Number(f.importeFacturado), 0);
+  return { facturas, total, cantidad: facturas.length };
 }

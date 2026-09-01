@@ -42,6 +42,22 @@ export async function resolverConflictoPrecioAction(_prev: ActionState, formData
         tx
       );
     });
+  } else if (opcion === "excepcion") {
+    // Acepta este importe puntual sin modificar el precio de referencia del servicio
+    // (no queda en historial_precio: la condicion general del servicio no cambia).
+    await prisma.$transaction(async (tx) => {
+      await tx.factura.update({ where: { id: facturaId }, data: { precioEstado: "COINCIDE" } });
+      await registrarAuditoria(
+        {
+          usuarioId: user.id,
+          entidadTipo: "factura",
+          entidadId: facturaId,
+          accion: "APROBACION_EXCEPCIONAL_PRECIO",
+          detalle: `Aceptado como excepción puntual, sin cambiar el precio de referencia (${factura.servicio.precioVigente.toString()}). ${motivo}`,
+        },
+        tx
+      );
+    });
   } else {
     const nuevoPrecio = Number(formData.get("nuevoPrecio"));
     if (!nuevoPrecio || nuevoPrecio <= 0) return { error: "Ingresá el nuevo precio vigente." };

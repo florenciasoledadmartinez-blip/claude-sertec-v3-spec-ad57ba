@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/dal";
 import { cargarFacturasConEstado } from "@/lib/facturas-query";
 import { formatMoneda, diasHabilesTranscurridos } from "@/lib/format";
-import { ESTADO_FACTURA_LABEL, ESTADOS_EXCEPCION, type EstadoFacturaCode } from "@/lib/estado-factura";
+import { ESTADO_FACTURA_LABEL, ESTADOS_EXCEPCION, responsableExcepcion, type EstadoFacturaCode } from "@/lib/estado-factura";
 import { getConfigSistema } from "@/lib/config";
 
 const SLA_POR_ESTADO: Partial<Record<EstadoFacturaCode, (dias: { precio: number; parcial: number; periodo: number }) => number>> = {
@@ -72,7 +72,9 @@ export default async function FacturasBloqueadasPage() {
                     <td className={`px-4 py-2 ${vencida ? "font-medium text-red-600" : "text-slate-600"}`}>
                       {dias} {sla != null ? `/ ${sla} hábiles` : ""}
                     </td>
-                    <td className="px-4 py-2 text-slate-600">{responsableSugerido(estado)}</td>
+                    <td className="px-4 py-2 text-slate-600">
+                      {responsableExcepcion(estado, config.resolutorConflictoPrecio)}
+                    </td>
                   </tr>
                 );
               })}
@@ -89,21 +91,4 @@ export default async function FacturasBloqueadasPage() {
       ))}
     </div>
   );
-}
-
-function responsableSugerido(estado: EstadoFacturaCode) {
-  switch (estado) {
-    case "PERIODO_A_CONFIRMAR":
-      return "Responsable operativo";
-    case "PENDIENTE_VALIDAR_PRESTACION":
-      return "Responsable operativo";
-    case "CONFLICTO_PARCIAL":
-      return "Compras";
-    case "CONFLICTO_PRECIO":
-      return "Según configuración";
-    case "CONFLICTO_PRESUPUESTO":
-      return "Responsable operativo / Compras";
-    default:
-      return "—";
-  }
 }
