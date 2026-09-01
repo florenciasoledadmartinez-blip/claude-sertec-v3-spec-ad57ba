@@ -3,10 +3,11 @@ import { requireUser, hasRole } from "@/lib/dal";
 import { prisma } from "@/lib/db";
 import { cargarFacturasConEstado } from "@/lib/facturas-query";
 import { getConfigSistema } from "@/lib/config";
+import { formatMoneda } from "@/lib/format";
 import { ROLE_LABELS } from "@/lib/roles";
 import type { RoleName } from "@/generated/prisma/client";
 
-type Pendiente = { label: string; count: number; href: string };
+type Pendiente = { label: string; count: number; href: string; detalle?: string };
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -20,21 +21,24 @@ export default async function DashboardPage() {
   const grupos: { role: RoleName; items: Pendiente[] }[] = [];
 
   if (hasRole(user, "RESPONSABLE_OPERATIVO")) {
-    const [periodosPendientes, facturasAConfirmar] = await Promise.all([
+    const [periodosPendientes, facturasAConfirmar, misFacturas] = await Promise.all([
       prisma.prestacion.count({
         where: { estado: "PENDIENTE", servicio: { responsableOperativoId: user.id, activo: true } },
       }),
       prisma.factura.count({
         where: { periodoAConfirmar: true, servicio: { responsableOperativoId: user.id } },
       }),
+      cargarFacturasConEstado({ servicio: { responsableOperativoId: user.id } }),
     ]);
-    grupos.push({
-      role: "RESPONSABLE_OPERATIVO",
-      items: [
-        { label: "Períodos pendientes de certificar", count: periodosPendientes, href: "/servicios" },
-        { label: "Facturas con período a confirmar", count: facturasAConfirmar, href: "/servicios" },
-      ],
-    });
+    const items: Pendiente[] = [
+      { label: "Períodos pendientes de certificar", count: periodosPendientes, href: "/servicios" },
+      { label: "Facturas con período a confirmar", count: facturasAConfirmar, href: "/servicios" },
+    ];
+    if (config.resolutorConflictoPrecio === "RESPONSABLE_OPERATIVO") {
+      const conflictosPrecio = misFacturas.filter((f) => f.estado === "CONFLICTO_PRECIO").length;
+      items.push({ label: "Conflictos de precio", count: conflictosPrecio, href: "/servicios" });
+    }
+    grupos.push({ role: "RESPONSABLE_OPERATIVO", items });
   }
 
   if (hasRole(user, "ANALISTA_CXP")) {
@@ -71,18 +75,34 @@ export default async function DashboardPage() {
   }
 
   if (hasRole(user, "GERENCIA")) {
-    const paraAutorizar = facturas.filter((f) => f.estado === "LISTA_PARA_AUTORIZAR").length;
+    const facturasParaAutorizar = facturas.filter((f) => f.estado === "LISTA_PARA_AUTORIZAR");
+    const montoParaAutorizar = facturasParaAutorizar.reduce((acc, f) => acc + Number(f.importeFacturado), 0);
     grupos.push({
       role: "GERENCIA",
-      items: [{ label: "Para autorizar", count: paraAutorizar, href: "/gerencia" }],
+      items: [
+        {
+          label: "Para autorizar",
+          count: facturasParaAutorizar.length,
+          href: "/gerencia",
+          detalle: facturasParaAutorizar.length > 0 ? formatMoneda(montoParaAutorizar) : undefined,
+        },
+      ],
     });
   }
 
   if (hasRole(user, "TESORERIA")) {
-    const pendientesPago = facturas.filter((f) => f.estado === "AUTORIZADA_PENDIENTE_PAGO").length;
+    const facturasPendientesPago = facturas.filter((f) => f.estado === "AUTORIZADA_PENDIENTE_PAGO");
+    const montoPendientePago = facturasPendientesPago.reduce((acc, f) => acc + Number(f.importeFacturado), 0);
     grupos.push({
       role: "TESORERIA",
-      items: [{ label: "Pendientes de pago", count: pendientesPago, href: "/tesoreria" }],
+      items: [
+        {
+          label: "Pendientes de pago",
+          count: facturasPendientesPago.length,
+          href: "/tesoreria",
+          detalle: facturasPendientesPago.length > 0 ? formatMoneda(montoPendientePago) : undefined,
+        },
+      ],
     });
   }
 
@@ -124,7 +144,10 @@ export default async function DashboardPage() {
                     href={item.href}
                     className="flex items-center justify-between rounded-md px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   >
-                    <span>{item.label}</span>
+                    <span>
+                      {item.label}
+                      {item.detalle && <span className="ml-2 text-xs text-slate-400">{item.detalle}</span>}
+                    </span>
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                         item.count > 0 ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-400"

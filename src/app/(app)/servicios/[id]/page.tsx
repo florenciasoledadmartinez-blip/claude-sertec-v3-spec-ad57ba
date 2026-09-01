@@ -1,12 +1,16 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireRole, hasRole } from "@/lib/dal";
 import { prisma } from "@/lib/db";
 import { tieneExcepcionPrecioAbierta } from "@/lib/excepciones";
+import { getConfigSistema } from "@/lib/config";
+import { cargarFacturasConEstado } from "@/lib/facturas-query";
 import { formatMoneda, formatFecha, formatFechaHora } from "@/lib/format";
 import { periodoLabel } from "@/lib/periodos";
 import { editarServicioAction, darDeBajaServicioAction, reactivarServicioAction } from "@/actions/servicios";
 import { ServicioForm } from "../servicio-form";
 import { CertificarForm, PeriodoManualForm, AsignarPeriodoForm } from "../prestacion-forms";
+import { ResolverConflictoPrecioForm } from "../../facturas/factura-actions";
 
 const ESTADO_PRESTACION_LABEL: Record<string, string> = {
   PENDIENTE: "Pendiente",
@@ -46,6 +50,16 @@ export default async function ServicioDetailPage({ params }: { params: Promise<{
   });
 
   const precioBloqueado = await tieneExcepcionPrecioAbierta(id);
+
+  const config = await getConfigSistema();
+  const facturasDelServicio = await cargarFacturasConEstado({ servicioId: id });
+  const facturasConflictoPrecio = facturasDelServicio.filter((f) => f.estado === "CONFLICTO_PRECIO");
+  const esResponsableDelServicio = servicio.responsableOperativoId === user.id;
+  const puedeResolverPrecio =
+    hasRole(user, "ADMIN") ||
+    (config.resolutorConflictoPrecio === "RESPONSABLE_OPERATIVO"
+      ? esResponsableDelServicio
+      : hasRole(user, "COMPRAS"));
 
   return (
     <div className="flex flex-col gap-8">
@@ -106,6 +120,38 @@ export default async function ServicioDetailPage({ params }: { params: Promise<{
                   facturaId={f.id}
                   periodos={servicio.prestaciones.map((p) => ({ id: p.id, periodo: p.periodo }))}
                 />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {facturasConflictoPrecio.length > 0 && (
+        <section className="rounded-lg border border-amber-200 bg-amber-50 p-6">
+          <h2 className="mb-1 font-medium text-slate-900">
+            Facturas con conflicto de precio ({facturasConflictoPrecio.length})
+          </h2>
+          <p className="mb-3 text-sm text-slate-600">
+            {puedeResolverPrecio
+              ? "El importe facturado no coincide con el precio acordado. Resolvé acá mismo."
+              : `Según la configuración, esto lo resuelve ${
+                  config.resolutorConflictoPrecio === "COMPRAS" ? "Compras" : "el responsable operativo"
+                }.`}
+          </p>
+          <div className="flex flex-col gap-4">
+            {facturasConflictoPrecio.map((f) => (
+              <div key={f.id} className="rounded-md border border-amber-200 bg-white p-3">
+                <div className="mb-2 text-sm text-slate-700">
+                  <Link href={`/facturas/${f.id}`} className="font-medium hover:underline">
+                    Factura {f.numeroFactura}
+                  </Link>{" "}
+                  del {formatFecha(f.fechaFactura)} — facturado {formatMoneda(f.importeFacturado)} vs. precio
+                  vigente {formatMoneda(servicio.precioVigente)}
+                  {f.periodos.length > 1 ? ` × ${f.periodos.length} períodos` : ""}
+                </div>
+                {puedeResolverPrecio && (
+                  <ResolverConflictoPrecioForm facturaId={f.id} precioVigente={Number(servicio.precioVigente)} />
+                )}
               </div>
             ))}
           </div>

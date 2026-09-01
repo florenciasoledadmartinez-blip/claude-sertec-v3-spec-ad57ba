@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireRole, hasRole } from "@/lib/dal";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client";
+import { cargarFacturasConEstado } from "@/lib/facturas-query";
 import { formatMoneda, formatFecha } from "@/lib/format";
 import { periodoLabel } from "@/lib/periodos";
 
@@ -24,6 +25,14 @@ export default async function ServiciosPage({
     include: { responsableOperativo: true, prestaciones: { where: { estado: "PENDIENTE" } } },
     orderBy: [{ activo: "desc" }, { proveedor: "asc" }],
   });
+
+  const facturas = await cargarFacturasConEstado({ servicioId: { in: servicios.map((s) => s.id) } });
+  const conflictosPorServicio = new Map<string, number>();
+  for (const f of facturas) {
+    if (f.estado === "CONFLICTO_PRECIO") {
+      conflictosPorServicio.set(f.servicioId, (conflictosPorServicio.get(f.servicioId) ?? 0) + 1);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -82,6 +91,7 @@ export default async function ServiciosPage({
               <th className="px-4 py-3">Periodicidad</th>
               <th className="px-4 py-3">Precio vigente</th>
               <th className="px-4 py-3">Pendientes de certificar</th>
+              <th className="px-4 py-3">Conflictos de precio</th>
               <th className="px-4 py-3">Estado</th>
             </tr>
           </thead>
@@ -110,6 +120,18 @@ export default async function ServiciosPage({
                   )}
                 </td>
                 <td className="px-4 py-3">
+                  {(conflictosPorServicio.get(s.id) ?? 0) > 0 ? (
+                    <Link
+                      href={`/servicios/${s.id}`}
+                      className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 hover:underline"
+                    >
+                      {conflictosPorServicio.get(s.id)}
+                    </Link>
+                  ) : (
+                    <span className="text-slate-400">—</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
                   {s.activo ? (
                     <span className="text-emerald-700">Activo</span>
                   ) : (
@@ -120,7 +142,7 @@ export default async function ServiciosPage({
             ))}
             {servicios.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-slate-400">
+                <td colSpan={8} className="px-4 py-6 text-center text-slate-400">
                   No hay servicios que coincidan con el filtro. Fecha de vigencia sugerida:{" "}
                   {formatFecha(new Date("2026-04-01"))} en adelante.
                 </td>
