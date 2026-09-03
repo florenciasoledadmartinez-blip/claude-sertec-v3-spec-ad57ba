@@ -10,16 +10,17 @@ export default async function AdminConfigPage() {
     <div className="flex max-w-2xl flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Configuración</h1>
-        <p className="text-slate-500">Parámetros del sistema (spec sección 11: pendientes de confirmar con la empresa).</p>
+        <p className="text-slate-500">Parámetros del sistema (spec sección 12: pendientes de confirmar con la empresa).</p>
       </div>
       <ConfigForm
         defaults={{
-          resolutorConflictoPrecio: config.resolutorConflictoPrecio,
           slaConflictoPrecioDias: config.slaConflictoPrecioDias,
           slaCumplimientoParcialDias: config.slaCumplimientoParcialDias,
           slaPeriodoAConfirmarDias: config.slaPeriodoAConfirmarDias,
+          slaAprobacionDias: config.slaAprobacionDias,
           presupuestoContratoActivo: config.presupuestoContratoActivo,
           fechaCorte: config.fechaCorte.toISOString().slice(0, 10),
+          umbralAnticipoAutorizacion: Number(config.umbralAnticipoAutorizacion),
         }}
       />
     </div>

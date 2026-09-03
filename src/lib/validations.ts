@@ -16,6 +16,12 @@ export const ServicioSchema = z.object({
   duracionEnPeriodos: z.coerce.number().int().positive().optional().or(z.literal("").transform(() => undefined)),
 });
 
+/** Edicion de un servicio existente: nunca incluye precioVigente (solo cambia via solicitud). */
+export const ServicioEdicionSchema = ServicioSchema.omit({
+  responsableOperativoId: true,
+  precioVigente: true,
+});
+
 export const CertificacionSchema = z.object({
   prestacionId: z.string().min(1),
   estado: z.enum(["CUMPLIDO", "PARCIAL", "NO_CUMPLIDO"]),
@@ -29,4 +35,20 @@ export const FacturaSchema = z.object({
   importeFacturado: z.coerce.number().positive("El importe debe ser mayor a 0."),
   periodoModo: z.enum(["periodos", "a_confirmar"]),
   periodoIds: z.array(z.string()).optional(),
+  anticipoId: z.string().trim().optional(),
+  varianteAplicacionAnticipo: z.enum(["SALDO_RESTANTE", "TOTAL_CON_CREDITO"]).optional(),
+});
+
+export const SolicitudPrecioSchema = z.object({
+  servicioId: z.string().min(1),
+  precioPropuesto: z.coerce.number().positive("El precio propuesto debe ser mayor a 0."),
+  observaciones: z.string().trim().min(1, "Contá por qué corresponde el cambio de precio."),
+});
+
+export const AnticipoSchema = z.object({
+  proveedor: z.string().trim().min(1, "Ingresá el proveedor."),
+  cuit: z.string().trim().min(1, "Ingresá el CUIT."),
+  numeroProforma: z.string().trim().min(1, "Ingresá el número de proforma."),
+  monto: z.coerce.number().positive("El monto debe ser mayor a 0."),
+  fechaEstimadaEntrega: z.string().trim().optional(),
 });

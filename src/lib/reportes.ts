@@ -27,7 +27,7 @@ export async function getReporteExcepciones(): Promise<FilaExcepcion[]> {
 
     let sla: number | null = null;
     if (f.estado === "CONFLICTO_PRECIO") sla = config.slaConflictoPrecioDias;
-    if (f.estado === "CONFLICTO_PARCIAL") sla = config.slaCumplimientoParcialDias;
+    if (f.estado === "PENDIENTE_AJUSTE_PROVEEDOR") sla = config.slaCumplimientoParcialDias;
     if (f.estado === "PERIODO_A_CONFIRMAR") sla = config.slaPeriodoAConfirmarDias;
 
     return {
@@ -36,11 +36,21 @@ export async function getReporteExcepciones(): Promise<FilaExcepcion[]> {
       numeroFactura: f.numeroFactura,
       tipoExcepcion: ESTADO_FACTURA_LABEL[f.estado],
       diasAbierta: dias,
-      responsable: responsableExcepcion(f.estado, config.resolutorConflictoPrecio),
+      responsable: responsableExcepcion(f.estado),
       observacion: observacionPeriodo ?? "",
       fechaLimite: sla != null ? diasHabilesDesde(f.fechaRegistro, sla) : null,
     };
   });
+}
+
+/** Anticipos pendientes de aplicar a una factura real (spec 7.4). */
+export async function getReporteAnticipos() {
+  const anticipos = await prisma.anticipo.findMany({
+    where: { aplicado: false },
+    include: { solicitadoPor: true },
+    orderBy: { fechaSolicitud: "asc" },
+  });
+  return anticipos;
 }
 
 export async function getReporteConciliacion(desde?: Date, hasta?: Date) {

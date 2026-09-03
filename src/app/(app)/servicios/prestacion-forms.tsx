@@ -6,6 +6,7 @@ import {
   certificarPrestacionAction,
   crearPeriodoManualAction,
   asignarPeriodoFacturaAction,
+  cargarImporteAjustadoAction,
 } from "@/actions/servicios";
 
 export function CertificarForm({ prestacionId }: { prestacionId: string }) {
@@ -42,6 +43,45 @@ export function CertificarForm({ prestacionId }: { prestacionId: string }) {
       />
       {state?.error && <p className="text-xs text-red-600">{state.error}</p>}
       {state?.success && <p className="text-xs text-emerald-600">{state.success}</p>}
+    </form>
+  );
+}
+
+export function AjusteImporteForm({
+  prestacionId,
+  importeActual,
+}: {
+  prestacionId: string;
+  importeActual?: number | null;
+}) {
+  const [state, formAction, pending] = useActionState(cargarImporteAjustadoAction, undefined);
+
+  return (
+    <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-md border border-amber-200 bg-amber-50 p-3">
+      <input type="hidden" name="prestacionId" value={prestacionId} />
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-medium text-slate-600">
+          Importe esperado ajustado (lo que le pediste al proveedor que facture)
+        </label>
+        <input
+          name="importeEsperadoAjustado"
+          type="number"
+          step="0.01"
+          min="0"
+          required
+          defaultValue={importeActual ?? undefined}
+          className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+        />
+      </div>
+      <button
+        type="submit"
+        disabled={pending}
+        className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+      >
+        {pending ? "Guardando..." : importeActual != null ? "Actualizar importe" : "Cargar importe ajustado"}
+      </button>
+      {state?.error && <p className="w-full text-xs text-red-600">{state.error}</p>}
+      {state?.success && <p className="w-full text-xs text-emerald-600">{state.success}</p>}
     </form>
   );
 }

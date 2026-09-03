@@ -7,7 +7,7 @@ import { getConfigSistema } from "@/lib/config";
 
 const SLA_POR_ESTADO: Partial<Record<EstadoFacturaCode, (dias: { precio: number; parcial: number; periodo: number }) => number>> = {
   CONFLICTO_PRECIO: (d) => d.precio,
-  CONFLICTO_PARCIAL: (d) => d.parcial,
+  PENDIENTE_AJUSTE_PROVEEDOR: (d) => d.parcial,
   PERIODO_A_CONFIRMAR: (d) => d.periodo,
 };
 
@@ -72,9 +72,7 @@ export default async function FacturasBloqueadasPage() {
                     <td className={`px-4 py-2 ${vencida ? "font-medium text-red-600" : "text-slate-600"}`}>
                       {dias} {sla != null ? `/ ${sla} hábiles` : ""}
                     </td>
-                    <td className="px-4 py-2 text-slate-600">
-                      {responsableExcepcion(estado, config.resolutorConflictoPrecio)}
-                    </td>
+                    <td className="px-4 py-2 text-slate-600">{responsableExcepcion(estado)}</td>
                   </tr>
                 );
               })}

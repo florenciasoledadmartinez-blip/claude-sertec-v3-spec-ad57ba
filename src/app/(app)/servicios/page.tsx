@@ -2,9 +2,22 @@ import Link from "next/link";
 import { requireRole, hasRole } from "@/lib/dal";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client";
-import { cargarFacturasConEstado } from "@/lib/facturas-query";
 import { formatMoneda, formatFecha } from "@/lib/format";
 import { periodoLabel } from "@/lib/periodos";
+
+const ESTADO_LABEL: Record<string, string> = {
+  PENDIENTE_DE_APROBACION: "Pendiente de aprobación",
+  ACTIVO: "Activo",
+  RECHAZADO: "Rechazado",
+  BAJA: "Dado de baja",
+};
+
+const ESTADO_COLOR: Record<string, string> = {
+  PENDIENTE_DE_APROBACION: "text-amber-700",
+  ACTIVO: "text-emerald-700",
+  RECHAZADO: "text-red-700",
+  BAJA: "text-slate-400",
+};
 
 export default async function ServiciosPage({
   searchParams,
@@ -16,23 +29,14 @@ export default async function ServiciosPage({
 
   const where: Prisma.ServicioWhereInput = hasRole(user, "ADMIN") ? {} : { responsableOperativoId: user.id };
   if (sp.proveedor) where.proveedor = { contains: sp.proveedor, mode: "insensitive" };
-  if (sp.estado === "activo") where.activo = true;
-  if (sp.estado === "baja") where.activo = false;
+  if (sp.estado) where.estado = sp.estado as Prisma.EnumEstadoServicioFilter["equals"];
   if (sp.periodicidad) where.periodicidad = sp.periodicidad as Prisma.EnumPeriodicidadFilter["equals"];
 
   const servicios = await prisma.servicio.findMany({
     where,
     include: { responsableOperativo: true, prestaciones: { where: { estado: "PENDIENTE" } } },
-    orderBy: [{ activo: "desc" }, { proveedor: "asc" }],
+    orderBy: [{ createdAt: "desc" }],
   });
-
-  const facturas = await cargarFacturasConEstado({ servicioId: { in: servicios.map((s) => s.id) } });
-  const conflictosPorServicio = new Map<string, number>();
-  for (const f of facturas) {
-    if (f.estado === "CONFLICTO_PRECIO") {
-      conflictosPorServicio.set(f.servicioId, (conflictosPorServicio.get(f.servicioId) ?? 0) + 1);
-    }
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -45,7 +49,7 @@ export default async function ServiciosPage({
           href="/servicios/nuevo"
           className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
         >
-          Nuevo servicio
+          Proponer servicio
         </Link>
       </div>
 
@@ -58,8 +62,10 @@ export default async function ServiciosPage({
         />
         <select name="estado" defaultValue={sp.estado ?? ""} className="rounded-md border border-slate-300 px-2 py-1.5">
           <option value="">Estado: todos</option>
-          <option value="activo">Activo</option>
-          <option value="baja">Dado de baja</option>
+          <option value="PENDIENTE_DE_APROBACION">Pendiente de aprobación</option>
+          <option value="ACTIVO">Activo</option>
+          <option value="RECHAZADO">Rechazado</option>
+          <option value="BAJA">Dado de baja</option>
         </select>
         <select
           name="periodicidad"
@@ -91,7 +97,6 @@ export default async function ServiciosPage({
               <th className="px-4 py-3">Periodicidad</th>
               <th className="px-4 py-3">Precio vigente</th>
               <th className="px-4 py-3">Pendientes de certificar</th>
-              <th className="px-4 py-3">Conflictos de precio</th>
               <th className="px-4 py-3">Estado</th>
             </tr>
           </thead>
@@ -119,30 +124,12 @@ export default async function ServiciosPage({
                     <span className="text-slate-400">—</span>
                   )}
                 </td>
-                <td className="px-4 py-3">
-                  {(conflictosPorServicio.get(s.id) ?? 0) > 0 ? (
-                    <Link
-                      href={`/servicios/${s.id}`}
-                      className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 hover:underline"
-                    >
-                      {conflictosPorServicio.get(s.id)}
-                    </Link>
-                  ) : (
-                    <span className="text-slate-400">—</span>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  {s.activo ? (
-                    <span className="text-emerald-700">Activo</span>
-                  ) : (
-                    <span className="text-slate-400">Dado de baja</span>
-                  )}
-                </td>
+                <td className={`px-4 py-3 ${ESTADO_COLOR[s.estado]}`}>{ESTADO_LABEL[s.estado]}</td>
               </tr>
             ))}
             {servicios.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-6 text-center text-slate-400">
                   No hay servicios que coincidan con el filtro. Fecha de vigencia sugerida:{" "}
                   {formatFecha(new Date("2026-04-01"))} en adelante.
                 </td>

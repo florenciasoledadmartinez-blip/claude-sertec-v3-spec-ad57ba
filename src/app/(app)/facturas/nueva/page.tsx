@@ -7,9 +7,14 @@ export default async function NuevaFacturaPage() {
   await requireRole("ANALISTA_CXP");
 
   const servicios = await prisma.servicio.findMany({
-    where: { activo: true },
+    where: { estado: "ACTIVO" },
     orderBy: { proveedor: "asc" },
     include: { prestaciones: { orderBy: { periodo: "desc" } } },
+  });
+
+  const anticipos = await prisma.anticipo.findMany({
+    where: { estado: "PAGADO", aplicado: false },
+    orderBy: { fechaPago: "asc" },
   });
 
   return (
@@ -22,7 +27,16 @@ export default async function NuevaFacturaPage() {
         </p>
       </div>
       <div className="rounded-lg border border-slate-200 bg-white p-6">
-        <FacturaForm servicios={servicios} action={registrarFacturaAction} />
+        <FacturaForm
+          servicios={servicios}
+          action={registrarFacturaAction}
+          anticiposDisponibles={anticipos.map((a) => ({
+            id: a.id,
+            proveedor: a.proveedor,
+            numeroProforma: a.numeroProforma,
+            monto: Number(a.monto),
+          }))}
+        />
       </div>
     </div>
   );

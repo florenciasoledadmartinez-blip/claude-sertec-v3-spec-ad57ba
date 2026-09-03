@@ -1,25 +1,26 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/dal";
 import { prisma } from "@/lib/db";
+import { calcularImporteEsperado, facturaConDatosInclude } from "@/lib/facturas-query";
 import { formatMoneda, formatFecha } from "@/lib/format";
-import { ReabrirFacturaForm } from "../admin-forms";
+import { AutorizacionExcepcionalForm } from "../gerencia-forms";
 
-export default async function AdminRechazadasPage() {
-  await requireRole("ADMIN");
+export default async function GerenciaExcepcionesPage() {
+  await requireRole("GERENCIA");
 
   const facturas = await prisma.factura.findMany({
-    where: { rechazada: true },
-    include: { servicio: true, rechazadaPor: true },
-    orderBy: { rechazadaFecha: "desc" },
+    where: { solicitaExcepcionPrecio: true },
+    include: facturaConDatosInclude,
+    orderBy: { solicitaExcepcionFecha: "asc" },
   });
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Facturas rechazadas</h1>
+        <h1 className="text-2xl font-semibold text-slate-900">Autorizaciones excepcionales</h1>
         <p className="text-slate-500">
-          Dejar una factura &quot;lista para autorizar&quot; sin tocarla equivale a posponerla — no hace falta
-          rechazarla para eso. Rechazar es una decisión terminal; reabrirla acá requiere motivo y queda auditado.
+          El proveedor no corrigió la factura a tiempo y el Analista pidió habilitarla puntualmente, sin tocar el
+          precio de referencia del servicio.
         </p>
       </div>
 
@@ -34,23 +35,19 @@ export default async function AdminRechazadasPage() {
                 <span className="text-slate-500">— {f.servicio.proveedor}</span>
               </div>
               <span className="text-xs text-slate-400">
-                {formatFecha(f.fechaRegistro)} · {formatMoneda(f.importeFacturado)}
+                Pedido por {f.solicitaExcepcionPor?.nombre} el {formatFecha(f.solicitaExcepcionFecha)}
               </span>
             </div>
-
-            <div className="rounded-md bg-red-50 p-3">
-              <p className="text-sm text-red-700">
-                Rechazada: {f.rechazadaMotivo} — {f.rechazadaPor?.nombre} ({formatFecha(f.rechazadaFecha)})
-              </p>
-              <div className="mt-2">
-                <ReabrirFacturaForm facturaId={f.id} />
-              </div>
-            </div>
+            <p className="mb-2 text-sm text-slate-700">
+              Facturado {formatMoneda(f.importeFacturado)} vs esperado {formatMoneda(calcularImporteEsperado(f))}
+            </p>
+            <p className="mb-3 text-sm text-slate-600">{f.solicitaExcepcionMotivo}</p>
+            <AutorizacionExcepcionalForm facturaId={f.id} />
           </div>
         ))}
         {facturas.length === 0 && (
           <p className="rounded-lg border border-slate-200 bg-white p-6 text-center text-slate-400">
-            No hay facturas rechazadas.
+            No hay pedidos de autorización excepcional pendientes.
           </p>
         )}
       </div>

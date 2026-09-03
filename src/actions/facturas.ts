@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/dal";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { FacturaSchema } from "@/lib/validations";
+import { calcularImporteEsperado, facturaConDatosInclude } from "@/lib/facturas-query";
 import type { ActionState } from "@/actions/servicios";
 
 /** Periodos elegidos que ya tienen otra factura asociada (alerta, no bloqueo). */
@@ -28,6 +29,34 @@ function mensajeDuplicados(duplicados: Awaited<ReturnType<typeof buscarPeriodosD
   return `Ya hay otra factura registrada para este servicio en: ${detalle}. Si igual querés continuar (por ejemplo, es una factura adicional del mismo período), volvé a apretar el botón.`;
 }
 
+async function aplicarAnticipoEnTx(
+  tx: Prisma.TransactionClient,
+  facturaId: string,
+  anticipoId: string | undefined,
+  variante: "SALDO_RESTANTE" | "TOTAL_CON_CREDITO" | undefined,
+  usuarioId: string
+) {
+  if (!anticipoId) return;
+  const anticipo = await tx.anticipo.findUnique({ where: { id: anticipoId } });
+  if (!anticipo || anticipo.aplicado || anticipo.estado !== "PAGADO") return;
+
+  await tx.factura.update({
+    where: { id: facturaId },
+    data: { anticipoId, varianteAplicacionAnticipo: variante ?? "SALDO_RESTANTE" },
+  });
+  await tx.anticipo.update({ where: { id: anticipoId }, data: { aplicado: true } });
+  await registrarAuditoria(
+    {
+      usuarioId,
+      entidadTipo: "anticipo",
+      entidadId: anticipoId,
+      accion: "APLICACION_ANTICIPO",
+      detalle: `Aplicado a factura ${facturaId} (${variante ?? "SALDO_RESTANTE"})`,
+    },
+    tx
+  );
+}
+
 export async function registrarFacturaAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireRole("ANALISTA_CXP");
 
@@ -39,6 +68,12 @@ export async function registrarFacturaAction(_prev: ActionState, formData: FormD
     return { error: parsed.error.issues[0]?.message ?? "Revisá los datos del formulario." };
   }
   const data = parsed.data;
+
+  const servicio = await prisma.servicio.findUnique({ where: { id: data.servicioId } });
+  if (!servicio) return { error: "Servicio no encontrado." };
+  if (servicio.estado !== "ACTIVO") {
+    return { error: "Este servicio no está activo — no admite facturas nuevas." };
+  }
 
   if (data.periodoModo === "periodos" && (!data.periodoIds || data.periodoIds.length === 0)) {
     return { error: "Elegí al menos un período, o marcá la factura como \"a confirmar\"." };
@@ -85,6 +120,7 @@ export async function registrarFacturaAction(_prev: ActionState, formData: FormD
         },
         tx
       );
+      await aplicarAnticipoEnTx(tx, f.id, data.anticipoId, data.varianteAplicacionAnticipo, user.id);
       return f;
     });
 
@@ -145,16 +181,15 @@ export async function editarFacturaAction(_prev: ActionState, formData: FormData
           fechaFactura: new Date(data.fechaFactura),
           importeFacturado: data.importeFacturado,
           periodoAConfirmar: data.periodoModo === "a_confirmar",
-          // Se corrigió la carga: vuelve a pasar por control de precio y se limpian rechazos previos.
+          // Se corrigió la carga: vuelve a pasar por control de precio y se limpia cualquier rechazo previo.
           precioEstado: "PENDIENTE_CONFIRMAR",
-          rechazadaPrecio: false,
-          rechazadaPrecioMotivo: null,
-          rechazadaPrecioPorId: null,
-          rechazadaPrecioFecha: null,
-          rechazadaGerencia: false,
-          rechazadaGerenciaMotivo: null,
-          rechazadaGerenciaPorId: null,
-          rechazadaGerenciaFecha: null,
+          precioConfirmadoFecha: null,
+          rechazada: false,
+          rechazadaMotivo: null,
+          rechazadaPorId: null,
+          rechazadaFecha: null,
+          solicitaExcepcionPrecio: false,
+          excepcionPrecioConcedida: false,
           periodos:
             data.periodoModo === "periodos" && data.periodoIds
               ? { create: data.periodoIds.map((prestacionId) => ({ prestacionId })) }
@@ -194,6 +229,9 @@ export async function eliminarFacturaAction(_prev: ActionState, formData: FormDa
   }
 
   await prisma.$transaction(async (tx) => {
+    if (factura.anticipoId) {
+      await tx.anticipo.update({ where: { id: factura.anticipoId }, data: { aplicado: false } });
+    }
     await registrarAuditoria(
       {
         usuarioId: user.id,
@@ -217,19 +255,21 @@ export async function confirmarPrecioAction(facturaId: string) {
 
   const factura = await prisma.factura.findUnique({
     where: { id: facturaId },
-    include: { servicio: true, periodos: true },
+    include: facturaConDatosInclude,
   });
   if (!factura) return;
   if (factura.periodoAConfirmar) return;
 
-  const cantidadPeriodos = Math.max(factura.periodos.length, 1);
-  const esperado = factura.servicio.precioVigente.mul(cantidadPeriodos);
+  const esperado = calcularImporteEsperado(factura);
   const coincide = esperado.equals(factura.importeFacturado);
 
   await prisma.$transaction(async (tx) => {
     await tx.factura.update({
       where: { id: facturaId },
-      data: { precioEstado: coincide ? "COINCIDE" : "CONFLICTO" },
+      data: {
+        precioEstado: coincide ? "COINCIDE" : "CONFLICTO",
+        precioConfirmadoFecha: new Date(),
+      },
     });
     await registrarAuditoria(
       {
@@ -247,4 +287,46 @@ export async function confirmarPrecioAction(facturaId: string) {
 
   revalidatePath(`/facturas/${facturaId}`);
   revalidatePath("/facturas/bloqueadas");
+}
+
+export async function solicitarAutorizacionExcepcionalAction(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const user = await requireRole("ANALISTA_CXP");
+  const facturaId = String(formData.get("facturaId") ?? "");
+  const motivo = String(formData.get("motivo") ?? "").trim();
+  if (!motivo) return { error: "Contá por qué necesitás la autorización excepcional." };
+
+  const factura = await prisma.factura.findUnique({ where: { id: facturaId } });
+  if (!factura) return { error: "Factura no encontrada." };
+  if (factura.precioEstado !== "CONFLICTO") {
+    return { error: "Esta factura no tiene un conflicto de precio abierto." };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.factura.update({
+      where: { id: facturaId },
+      data: {
+        solicitaExcepcionPrecio: true,
+        solicitaExcepcionMotivo: motivo,
+        solicitaExcepcionPorId: user.id,
+        solicitaExcepcionFecha: new Date(),
+      },
+    });
+    await registrarAuditoria(
+      {
+        usuarioId: user.id,
+        entidadTipo: "factura",
+        entidadId: facturaId,
+        accion: "SOLICITUD_AUTORIZACION_EXCEPCIONAL",
+        detalle: motivo,
+      },
+      tx
+    );
+  });
+
+  revalidatePath(`/facturas/${facturaId}`);
+  revalidatePath("/gerencia/excepciones");
+  return { success: "Autorización excepcional pedida a Gerencia." };
 }

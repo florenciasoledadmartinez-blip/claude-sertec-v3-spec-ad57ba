@@ -1,15 +1,16 @@
 import "server-only";
 import { cache } from "react";
 import { prisma } from "@/lib/db";
-import type { ConfigSistema } from "@/generated/prisma/client";
+import { Prisma, type ConfigSistema } from "@/generated/prisma/client";
 
 const DEFAULT_CONFIG: Omit<ConfigSistema, "id" | "updatedAt"> = {
-  resolutorConflictoPrecio: "RESPONSABLE_OPERATIVO",
   slaConflictoPrecioDias: 3,
   slaCumplimientoParcialDias: 5,
   slaPeriodoAConfirmarDias: 2,
+  slaAprobacionDias: 3,
   presupuestoContratoActivo: false,
   fechaCorte: new Date("2026-04-01T00:00:00.000Z"),
+  umbralAnticipoAutorizacion: new Prisma.Decimal(500000),
 };
 
 export const getConfigSistema = cache(async (): Promise<ConfigSistema> => {

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/dal";
 import { cargarFacturasConEstado } from "@/lib/facturas-query";
 import { formatMoneda, formatFecha } from "@/lib/format";
-import { AutorizarButton, RechazarGerenciaForm } from "../facturas/factura-actions";
+import { AutorizarButton, RechazarFacturaForm } from "../facturas/factura-actions";
 
 export default async function GerenciaPage() {
   await requireRole("GERENCIA");
@@ -37,7 +37,7 @@ export default async function GerenciaPage() {
             </p>
             <div className="flex flex-wrap gap-4">
               <AutorizarButton facturaId={f.id} />
-              <RechazarGerenciaForm facturaId={f.id} />
+              <RechazarFacturaForm facturaId={f.id} />
             </div>
           </div>
         ))}

@@ -2,7 +2,6 @@ import Link from "next/link";
 import { requireUser, hasRole } from "@/lib/dal";
 import { prisma } from "@/lib/db";
 import { cargarFacturasConEstado } from "@/lib/facturas-query";
-import { getConfigSistema } from "@/lib/config";
 import { formatMoneda } from "@/lib/format";
 import { ROLE_LABELS } from "@/lib/roles";
 import type { RoleName } from "@/generated/prisma/client";
@@ -11,34 +10,36 @@ type Pendiente = { label: string; count: number; href: string; detalle?: string 
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const config = await getConfigSistema();
 
-  const necesitaFacturas = ["ANALISTA_CXP", "COMPRAS", "GERENCIA", "TESORERIA"].some((r) =>
-    hasRole(user, r as RoleName)
-  );
+  const necesitaFacturas = ["ANALISTA_CXP", "GERENCIA", "TESORERIA"].some((r) => hasRole(user, r as RoleName));
   const facturas = necesitaFacturas ? await cargarFacturasConEstado({}) : [];
 
   const grupos: { role: RoleName; items: Pendiente[] }[] = [];
 
   if (hasRole(user, "RESPONSABLE_OPERATIVO")) {
-    const [periodosPendientes, facturasAConfirmar, misFacturas] = await Promise.all([
+    const [periodosPendientes, facturasAConfirmar, periodosSinAjuste] = await Promise.all([
       prisma.prestacion.count({
-        where: { estado: "PENDIENTE", servicio: { responsableOperativoId: user.id, activo: true } },
+        where: { estado: "PENDIENTE", servicio: { responsableOperativoId: user.id, estado: "ACTIVO" } },
       }),
       prisma.factura.count({
         where: { periodoAConfirmar: true, servicio: { responsableOperativoId: user.id } },
       }),
-      cargarFacturasConEstado({ servicio: { responsableOperativoId: user.id } }),
+      prisma.prestacion.count({
+        where: {
+          estado: "PARCIAL",
+          importeEsperadoAjustado: null,
+          servicio: { responsableOperativoId: user.id },
+        },
+      }),
     ]);
-    const items: Pendiente[] = [
-      { label: "Períodos pendientes de certificar", count: periodosPendientes, href: "/servicios" },
-      { label: "Facturas con período a confirmar", count: facturasAConfirmar, href: "/servicios" },
-    ];
-    if (config.resolutorConflictoPrecio === "RESPONSABLE_OPERATIVO") {
-      const conflictosPrecio = misFacturas.filter((f) => f.estado === "CONFLICTO_PRECIO").length;
-      items.push({ label: "Conflictos de precio", count: conflictosPrecio, href: "/servicios" });
-    }
-    grupos.push({ role: "RESPONSABLE_OPERATIVO", items });
+    grupos.push({
+      role: "RESPONSABLE_OPERATIVO",
+      items: [
+        { label: "Períodos pendientes de certificar", count: periodosPendientes, href: "/servicios" },
+        { label: "Facturas con período a confirmar", count: facturasAConfirmar, href: "/servicios" },
+        { label: "Períodos parciales sin importe ajustado", count: periodosSinAjuste, href: "/servicios" },
+      ],
+    });
   }
 
   if (hasRole(user, "ANALISTA_CXP")) {
@@ -46,37 +47,46 @@ export default async function DashboardPage() {
       [
         "PERIODO_A_CONFIRMAR",
         "PENDIENTE_VALIDAR_PRESTACION",
-        "CONFLICTO_PARCIAL",
+        "PENDIENTE_AJUSTE_PROVEEDOR",
         "CONFLICTO_PRECIO",
         "CONFLICTO_PRESUPUESTO",
       ].includes(f.estado)
     ).length;
     const paraConfirmarPrecio = facturas.filter((f) => f.estado === "PARA_CONFIRMAR_PRECIO").length;
+    const anticiposSinAplicar = await prisma.anticipo.count({ where: { aplicado: false } });
     grupos.push({
       role: "ANALISTA_CXP",
       items: [
         { label: "Facturas bloqueadas", count: bloqueadas, href: "/facturas/bloqueadas" },
         { label: "Para confirmar precio", count: paraConfirmarPrecio, href: "/facturas?estado=PARA_CONFIRMAR_PRECIO" },
+        { label: "Anticipos sin aplicar", count: anticiposSinAplicar, href: "/anticipos" },
       ],
     });
   }
 
   if (hasRole(user, "COMPRAS")) {
-    const parciales = facturas.filter((f) => f.estado === "CONFLICTO_PARCIAL").length;
-    const conflictosPrecio =
-      config.resolutorConflictoPrecio === "COMPRAS"
-        ? facturas.filter((f) => f.estado === "CONFLICTO_PRECIO").length
-        : 0;
-    const items: Pendiente[] = [{ label: "Cumplimiento parcial", count: parciales, href: "/compras/parciales" }];
-    if (config.resolutorConflictoPrecio === "COMPRAS") {
-      items.push({ label: "Conflictos de precio", count: conflictosPrecio, href: "/compras/precios" });
-    }
-    grupos.push({ role: "COMPRAS", items });
+    const [pendientesAutorizacion, autorizadosSinPagar] = await Promise.all([
+      prisma.anticipo.count({ where: { estado: "PENDIENTE_AUTORIZACION" } }),
+      prisma.anticipo.count({ where: { estado: "AUTORIZADO" } }),
+    ]);
+    grupos.push({
+      role: "COMPRAS",
+      items: [
+        { label: "Anticipos pendientes de autorización", count: pendientesAutorizacion, href: "/anticipos" },
+        { label: "Anticipos autorizados sin pagar", count: autorizadosSinPagar, href: "/anticipos" },
+      ],
+    });
   }
 
   if (hasRole(user, "GERENCIA")) {
     const facturasParaAutorizar = facturas.filter((f) => f.estado === "LISTA_PARA_AUTORIZAR");
     const montoParaAutorizar = facturasParaAutorizar.reduce((acc, f) => acc + Number(f.importeFacturado), 0);
+    const [altasPendientes, solicitudesPrecio, excepcionesPendientes, anticiposPendientes] = await Promise.all([
+      prisma.servicio.count({ where: { estado: "PENDIENTE_DE_APROBACION" } }),
+      prisma.solicitudCambioPrecio.count({ where: { estado: "PENDIENTE" } }),
+      prisma.factura.count({ where: { solicitaExcepcionPrecio: true } }),
+      prisma.anticipo.count({ where: { estado: "PENDIENTE_AUTORIZACION" } }),
+    ]);
     grupos.push({
       role: "GERENCIA",
       items: [
@@ -86,6 +96,10 @@ export default async function DashboardPage() {
           href: "/gerencia",
           detalle: facturasParaAutorizar.length > 0 ? formatMoneda(montoParaAutorizar) : undefined,
         },
+        { label: "Altas de servicio pendientes", count: altasPendientes, href: "/gerencia/servicios" },
+        { label: "Solicitudes de cambio de precio", count: solicitudesPrecio, href: "/gerencia/precios" },
+        { label: "Autorizaciones excepcionales pedidas", count: excepcionesPendientes, href: "/gerencia/excepciones" },
+        { label: "Anticipos pendientes de autorización", count: anticiposPendientes, href: "/gerencia/anticipos" },
       ],
     });
   }
@@ -93,6 +107,7 @@ export default async function DashboardPage() {
   if (hasRole(user, "TESORERIA")) {
     const facturasPendientesPago = facturas.filter((f) => f.estado === "AUTORIZADA_PENDIENTE_PAGO");
     const montoPendientePago = facturasPendientesPago.reduce((acc, f) => acc + Number(f.importeFacturado), 0);
+    const anticiposAPagar = await prisma.anticipo.count({ where: { estado: "AUTORIZADO" } });
     grupos.push({
       role: "TESORERIA",
       items: [
@@ -102,6 +117,7 @@ export default async function DashboardPage() {
           href: "/tesoreria",
           detalle: facturasPendientesPago.length > 0 ? formatMoneda(montoPendientePago) : undefined,
         },
+        { label: "Anticipos a pagar", count: anticiposAPagar, href: "/tesoreria/anticipos" },
       ],
     });
   }
@@ -109,7 +125,7 @@ export default async function DashboardPage() {
   if (hasRole(user, "ADMIN")) {
     const [noCumplidos, rechazadas] = await Promise.all([
       prisma.prestacion.count({ where: { estado: "NO_CUMPLIDO" } }),
-      prisma.factura.count({ where: { OR: [{ rechazadaGerencia: true }, { rechazadaPrecio: true }] } }),
+      prisma.factura.count({ where: { rechazada: true } }),
     ]);
     grupos.push({
       role: "ADMIN",

@@ -84,33 +84,24 @@ export function ConfigForm({
   defaults,
 }: {
   defaults: {
-    resolutorConflictoPrecio: string;
     slaConflictoPrecioDias: number;
     slaCumplimientoParcialDias: number;
     slaPeriodoAConfirmarDias: number;
+    slaAprobacionDias: number;
     presupuestoContratoActivo: boolean;
     fechaCorte: string;
+    umbralAnticipoAutorizacion: number;
   };
 }) {
   const [state, formAction, pending] = useActionState(actualizarConfigAction, undefined);
 
   return (
     <form action={formAction} className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-6">
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-slate-700">¿Quién resuelve el conflicto de precio?</label>
-        <select name="resolutorConflictoPrecio" defaultValue={defaults.resolutorConflictoPrecio} className="w-fit rounded-md border border-slate-300 px-3 py-2 text-sm">
-          <option value="RESPONSABLE_OPERATIVO">Responsable operativo del servicio</option>
-          <option value="COMPRAS">Compras</option>
-        </select>
-        <p className="text-xs text-slate-400">
-          Pendiente de confirmar con la empresa (spec 11): depende de cómo se negocia hoy con los proveedores.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <NumberField label="SLA conflicto de precio (días hábiles)" name="slaConflictoPrecioDias" defaultValue={defaults.slaConflictoPrecioDias} />
-        <NumberField label="SLA cumplimiento parcial (días hábiles)" name="slaCumplimientoParcialDias" defaultValue={defaults.slaCumplimientoParcialDias} />
+        <NumberField label="SLA ajuste de prestación parcial (días hábiles)" name="slaCumplimientoParcialDias" defaultValue={defaults.slaCumplimientoParcialDias} />
         <NumberField label="SLA período a confirmar (días hábiles)" name="slaPeriodoAConfirmarDias" defaultValue={defaults.slaPeriodoAConfirmarDias} />
+        <NumberField label="SLA aprobación de Gerencia (días hábiles)" name="slaAprobacionDias" defaultValue={defaults.slaAprobacionDias} />
       </div>
 
       <label className="flex items-center gap-2 text-sm text-slate-700">
@@ -118,9 +109,24 @@ export function ConfigForm({
         Activar control de presupuesto de contrato (opcional, spec 5.5)
       </label>
 
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-slate-700">Fecha de corte del circuito</label>
-        <input name="fechaCorte" type="date" defaultValue={defaults.fechaCorte} className="w-fit rounded-md border border-slate-300 px-3 py-2 text-sm" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-slate-700">Fecha de corte del circuito</label>
+          <input name="fechaCorte" type="date" defaultValue={defaults.fechaCorte} className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-slate-700">
+            Umbral de anticipo que requiere autorización de Gerencia (ARS)
+          </label>
+          <input
+            name="umbralAnticipoAutorizacion"
+            type="number"
+            min={0}
+            step="0.01"
+            defaultValue={defaults.umbralAnticipoAutorizacion}
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          />
+        </div>
       </div>
 
       {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
@@ -215,12 +221,11 @@ export function ImportarForm() {
   );
 }
 
-export function ReabrirFacturaForm({ facturaId, tipo }: { facturaId: string; tipo: "precio" | "gerencia" }) {
+export function ReabrirFacturaForm({ facturaId }: { facturaId: string }) {
   const [state, formAction, pending] = useActionState(reabrirFacturaRechazadaAction, undefined);
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-md border border-slate-200 p-3">
       <input type="hidden" name="facturaId" value={facturaId} />
-      <input type="hidden" name="tipo" value={tipo} />
       <input
         name="motivo"
         placeholder="Motivo de la reapertura (obligatorio)"

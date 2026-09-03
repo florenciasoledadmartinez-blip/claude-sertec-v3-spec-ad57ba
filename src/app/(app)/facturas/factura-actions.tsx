@@ -1,9 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { confirmarPrecioAction, eliminarFacturaAction } from "@/actions/facturas";
-import { resolverConflictoPrecioAction, resolverCumplimientoParcialAction } from "@/actions/excepciones";
-import { autorizarFacturaAction, rechazarFacturaGerenciaAction } from "@/actions/gerencia";
+import { confirmarPrecioAction, eliminarFacturaAction, solicitarAutorizacionExcepcionalAction } from "@/actions/facturas";
+import { autorizarFacturaAction, rechazarFacturaAction } from "@/actions/gerencia";
 import { marcarPagadaAction } from "@/actions/tesoreria";
 
 export function ConfirmarPrecioButton({ facturaId }: { facturaId: string }) {
@@ -20,64 +19,21 @@ export function ConfirmarPrecioButton({ facturaId }: { facturaId: string }) {
   );
 }
 
-export function ResolverConflictoPrecioForm({ facturaId, precioVigente }: { facturaId: string; precioVigente: number }) {
-  const [state, formAction, pending] = useActionState(resolverConflictoPrecioAction, undefined);
-  const [opcion, setOpcion] = useState<"actualizar_precio" | "excepcion" | "rechazar">("actualizar_precio");
-
+export function SolicitarExcepcionForm({ facturaId }: { facturaId: string }) {
+  const [state, formAction, pending] = useActionState(solicitarAutorizacionExcepcionalAction, undefined);
   return (
-    <form action={formAction} className="flex flex-col gap-3 rounded-md border border-amber-200 bg-amber-50 p-4">
+    <form action={formAction} className="flex flex-col gap-2 rounded-md border border-amber-200 bg-amber-50 p-4">
       <input type="hidden" name="facturaId" value={facturaId} />
-      <div className="flex flex-col gap-2 text-sm">
-        <label className="flex items-center gap-2">
-          <input type="radio" name="opcion" value="actualizar_precio" checked={opcion === "actualizar_precio"} onChange={() => setOpcion("actualizar_precio")} />
-          Actualizar precio vigente del servicio
-        </label>
-        <label className="flex items-center gap-2">
-          <input type="radio" name="opcion" value="excepcion" checked={opcion === "excepcion"} onChange={() => setOpcion("excepcion")} />
-          Aceptar este importe como excepción puntual (no cambia el precio de referencia)
-        </label>
-        <label className="flex items-center gap-2">
-          <input type="radio" name="opcion" value="rechazar" checked={opcion === "rechazar"} onChange={() => setOpcion("rechazar")} />
-          Rechazar factura
-        </label>
-      </div>
-      {opcion === "actualizar_precio" && (
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-600">Nuevo precio vigente (actual: {precioVigente})</label>
-          <input name="nuevoPrecio" type="number" step="0.01" min="0" className="rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
-        </div>
-      )}
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-slate-600">Motivo / fecha (obligatorio)</label>
-        <textarea name="motivo" rows={2} required className="rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
-      </div>
-      <button type="submit" disabled={pending} className="w-fit rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50">
-        {pending ? "Guardando..." : "Confirmar resolución"}
-      </button>
-      {state?.error && <p className="text-xs text-red-600">{state.error}</p>}
-      {state?.success && <p className="text-xs text-emerald-600">{state.success}</p>}
-    </form>
-  );
-}
-
-export function ResolverParcialForm({ prestacionId }: { prestacionId: string }) {
-  const [state, formAction, pending] = useActionState(resolverCumplimientoParcialAction, undefined);
-  const [tipo, setTipo] = useState("NOTA_CREDITO");
-
-  return (
-    <form action={formAction} className="flex flex-col gap-3 rounded-md border border-amber-200 bg-amber-50 p-4">
-      <input type="hidden" name="prestacionId" value={prestacionId} />
-      <select name="tipo" value={tipo} onChange={(e) => setTipo(e.target.value)} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm">
-        <option value="NOTA_CREDITO">Nota de crédito solicitada</option>
-        <option value="PAGO_PARCIAL">Pago parcial autorizado</option>
-        <option value="RECHAZADA">Rechazada</option>
-      </select>
-      {tipo === "PAGO_PARCIAL" && (
-        <input name="importeAjustado" type="number" step="0.01" min="0" placeholder="Importe ajustado" className="rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
-      )}
-      <textarea name="detalle" rows={2} required placeholder="Detalle (obligatorio)" className="rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
-      <button type="submit" disabled={pending} className="w-fit rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50">
-        {pending ? "Guardando..." : "Resolver cumplimiento parcial"}
+      <label className="text-xs font-medium text-slate-600">
+        Por qué necesitás la autorización excepcional (el proveedor no corrigió a tiempo, etc.)
+      </label>
+      <textarea name="motivo" rows={2} required className="rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
+      <button
+        type="submit"
+        disabled={pending}
+        className="w-fit rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+      >
+        {pending ? "Pidiendo..." : "Pedir autorización excepcional a Gerencia"}
       </button>
       {state?.error && <p className="text-xs text-red-600">{state.error}</p>}
       {state?.success && <p className="text-xs text-emerald-600">{state.success}</p>}
@@ -96,8 +52,8 @@ export function AutorizarButton({ facturaId }: { facturaId: string }) {
   );
 }
 
-export function RechazarGerenciaForm({ facturaId }: { facturaId: string }) {
-  const [state, formAction, pending] = useActionState(rechazarFacturaGerenciaAction, undefined);
+export function RechazarFacturaForm({ facturaId }: { facturaId: string }) {
+  const [state, formAction, pending] = useActionState(rechazarFacturaAction, undefined);
   return (
     <form action={formAction} className="flex flex-col gap-2">
       <input type="hidden" name="facturaId" value={facturaId} />

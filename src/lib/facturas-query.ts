@@ -9,17 +9,32 @@ export const facturaConDatosInclude = {
   servicio: { include: { responsableOperativo: true } },
   periodos: { include: { prestacion: true } },
   registradoPor: true,
-  rechazadaPrecioPor: true,
-  rechazadaGerenciaPor: true,
+  rechazadaPor: true,
+  solicitaExcepcionPor: true,
+  excepcionPrecioResueltaPor: true,
   autorizadoPor: true,
   pagadoPor: true,
+  anticipo: true,
 } satisfies Prisma.FacturaInclude;
 
 export type FacturaConDatos = Prisma.FacturaGetPayload<{
   include: typeof facturaConDatosInclude;
 }>;
 
-export type FacturaConEstado = FacturaConDatos & { estado: EstadoFacturaCode };
+export type FacturaConEstado = FacturaConDatos & { estado: EstadoFacturaCode; importeEsperado: Prisma.Decimal };
+
+/**
+ * Importe esperado de la factura: para cada periodo cubierto, el importe_esperado_ajustado
+ * cargado por el responsable (si el periodo fue certificado Parcial) o, si no hay ajuste, el
+ * precio vigente del servicio. Reemplaza la comparacion vieja de precioVigente x cantidad.
+ */
+export function calcularImporteEsperado(factura: FacturaConDatos): Prisma.Decimal {
+  if (factura.periodos.length === 0) return factura.servicio.precioVigente;
+  return factura.periodos.reduce(
+    (acc, p) => acc.add(p.prestacion.importeEsperadoAjustado ?? factura.servicio.precioVigente),
+    new Prisma.Decimal(0)
+  );
+}
 
 export async function anotarEstados(facturas: FacturaConDatos[]): Promise<FacturaConEstado[]> {
   const config = await getConfigSistema();
@@ -47,20 +62,20 @@ export async function anotarEstados(facturas: FacturaConDatos[]): Promise<Factur
     const estado = computeEstadoFactura(
       {
         periodoAConfirmar: factura.periodoAConfirmar,
-        rechazadaPrecio: factura.rechazadaPrecio,
-        rechazadaGerencia: factura.rechazadaGerencia,
+        rechazada: factura.rechazada,
         precioEstado: factura.precioEstado,
+        excepcionPrecioConcedida: factura.excepcionPrecioConcedida,
         autorizado: factura.autorizado,
         pagado: factura.pagado,
         periodos: factura.periodos.map((p) => ({
           estado: p.prestacion.estado,
-          resolucionParcialTipo: p.prestacion.resolucionParcialTipo,
+          importeEsperadoAjustado: p.prestacion.importeEsperadoAjustado,
         })),
       },
       { presupuestoActivo: config.presupuestoContratoActivo, saldoPresupuestoInsuficiente }
     );
 
-    return { ...factura, estado };
+    return { ...factura, estado, importeEsperado: calcularImporteEsperado(factura) };
   });
 }
 

@@ -1,16 +1,14 @@
 import { ESTADO_FACTURA_LABEL, ESTADOS_EXCEPCION, ESTADOS_RECHAZADOS, type EstadoFacturaCode } from "@/lib/estado-factura";
 
 const COLOR: Record<EstadoFacturaCode, string> = {
-  RECHAZADA_PRECIO: "bg-red-100 text-red-800",
+  RECHAZADA: "bg-red-100 text-red-800",
   PERIODO_A_CONFIRMAR: "bg-amber-100 text-amber-800",
-  RECHAZADA_NO_PRESTADO: "bg-red-100 text-red-800",
+  BLOQUEADA_NO_PRESTADO: "bg-red-100 text-red-800",
   PENDIENTE_VALIDAR_PRESTACION: "bg-slate-100 text-slate-700",
-  CONFLICTO_PARCIAL: "bg-amber-100 text-amber-800",
-  RECHAZADA_PARCIAL: "bg-red-100 text-red-800",
+  PENDIENTE_AJUSTE_PROVEEDOR: "bg-amber-100 text-amber-800",
   PARA_CONFIRMAR_PRECIO: "bg-sky-100 text-sky-800",
   CONFLICTO_PRECIO: "bg-amber-100 text-amber-800",
   CONFLICTO_PRESUPUESTO: "bg-amber-100 text-amber-800",
-  RECHAZADA_GERENCIA: "bg-red-100 text-red-800",
   LISTA_PARA_AUTORIZAR: "bg-indigo-100 text-indigo-800",
   AUTORIZADA_PENDIENTE_PAGO: "bg-blue-100 text-blue-800",
   PAGADA: "bg-emerald-100 text-emerald-800",

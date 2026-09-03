@@ -20,9 +20,10 @@ export default async function NuevoServicioPage() {
   return (
     <div className="flex max-w-3xl flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Nuevo servicio</h1>
+        <h1 className="text-2xl font-semibold text-slate-900">Proponer servicio</h1>
         <p className="text-slate-500">
-          Alta de un servicio contratado sin orden de compra. Queda asignado a vos.
+          Alta de un servicio contratado sin orden de compra. Queda &quot;Pendiente de aprobación&quot; hasta que
+          Gerencia lo revise — no genera períodos ni admite facturas hasta que se apruebe.
         </p>
       </div>
       <div className="rounded-lg border border-slate-200 bg-white p-6">
@@ -32,7 +33,7 @@ export default async function NuevoServicioPage() {
           currentUserId={user.id}
           mostrarResponsable
           responsableEditable={puedeElegirOtroResponsable}
-          submitLabel="Crear servicio"
+          submitLabel="Proponer servicio"
         />
       </div>
     </div>

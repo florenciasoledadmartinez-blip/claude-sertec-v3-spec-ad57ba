@@ -75,24 +75,26 @@ export async function actualizarRolesUsuarioAction(formData: FormData) {
 }
 
 const ConfigSchema = z.object({
-  resolutorConflictoPrecio: z.enum(["RESPONSABLE_OPERATIVO", "COMPRAS"]),
   slaConflictoPrecioDias: z.coerce.number().int().positive(),
   slaCumplimientoParcialDias: z.coerce.number().int().positive(),
   slaPeriodoAConfirmarDias: z.coerce.number().int().positive(),
+  slaAprobacionDias: z.coerce.number().int().positive(),
   presupuestoContratoActivo: z.coerce.boolean().optional().default(false),
   fechaCorte: z.string().min(1),
+  umbralAnticipoAutorizacion: z.coerce.number().nonnegative(),
 });
 
 export async function actualizarConfigAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const admin = await requireRole("ADMIN");
 
   const parsed = ConfigSchema.safeParse({
-    resolutorConflictoPrecio: formData.get("resolutorConflictoPrecio"),
     slaConflictoPrecioDias: formData.get("slaConflictoPrecioDias"),
     slaCumplimientoParcialDias: formData.get("slaCumplimientoParcialDias"),
     slaPeriodoAConfirmarDias: formData.get("slaPeriodoAConfirmarDias"),
+    slaAprobacionDias: formData.get("slaAprobacionDias"),
     presupuestoContratoActivo: formData.get("presupuestoContratoActivo") === "on",
     fechaCorte: formData.get("fechaCorte"),
+    umbralAnticipoAutorizacion: formData.get("umbralAnticipoAutorizacion"),
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Revisá los datos." };
   const data = parsed.data;
@@ -100,21 +102,23 @@ export async function actualizarConfigAction(_prev: ActionState, formData: FormD
   await prisma.configSistema.upsert({
     where: { id: 1 },
     update: {
-      resolutorConflictoPrecio: data.resolutorConflictoPrecio,
       slaConflictoPrecioDias: data.slaConflictoPrecioDias,
       slaCumplimientoParcialDias: data.slaCumplimientoParcialDias,
       slaPeriodoAConfirmarDias: data.slaPeriodoAConfirmarDias,
+      slaAprobacionDias: data.slaAprobacionDias,
       presupuestoContratoActivo: data.presupuestoContratoActivo,
       fechaCorte: new Date(data.fechaCorte),
+      umbralAnticipoAutorizacion: data.umbralAnticipoAutorizacion,
     },
     create: {
       id: 1,
-      resolutorConflictoPrecio: data.resolutorConflictoPrecio,
       slaConflictoPrecioDias: data.slaConflictoPrecioDias,
       slaCumplimientoParcialDias: data.slaCumplimientoParcialDias,
       slaPeriodoAConfirmarDias: data.slaPeriodoAConfirmarDias,
+      slaAprobacionDias: data.slaAprobacionDias,
       presupuestoContratoActivo: data.presupuestoContratoActivo,
       fechaCorte: new Date(data.fechaCorte),
+      umbralAnticipoAutorizacion: data.umbralAnticipoAutorizacion,
     },
   });
 
@@ -133,7 +137,9 @@ export async function actualizarConfigAction(_prev: ActionState, formData: FormD
 export async function generarPeriodosAction() {
   const admin = await requireRole("ADMIN");
 
-  const servicios = await prisma.servicio.findMany({ where: { activo: true, periodicidad: { not: "POR_EVENTO" } } });
+  const servicios = await prisma.servicio.findMany({
+    where: { estado: "ACTIVO", periodicidad: { not: "POR_EVENTO" } },
+  });
 
   let creados = 0;
   for (const servicio of servicios) {
@@ -199,47 +205,25 @@ export async function reabrirPrestacionAction(_prev: ActionState, formData: Form
 export async function reabrirFacturaRechazadaAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const admin = await requireRole("ADMIN");
   const facturaId = String(formData.get("facturaId") ?? "");
-  const tipo = String(formData.get("tipo") ?? "");
   const motivo = String(formData.get("motivo") ?? "").trim();
 
-  if (!["precio", "gerencia"].includes(tipo)) return { error: "Tipo de reapertura inválido." };
   if (!motivo) return { error: "El motivo es obligatorio para reabrir una factura rechazada." };
 
   const factura = await prisma.factura.findUnique({ where: { id: facturaId } });
   if (!factura) return { error: "Factura no encontrada." };
-
-  if (tipo === "precio" && !factura.rechazadaPrecio) {
-    return { error: "Esta factura no está rechazada por precio." };
-  }
-  if (tipo === "gerencia" && !factura.rechazadaGerencia) {
-    return { error: "Esta factura no fue rechazada por Gerencia." };
-  }
+  if (!factura.rechazada) return { error: "Esta factura no está rechazada." };
 
   await prisma.$transaction(async (tx) => {
     await tx.factura.update({
       where: { id: facturaId },
-      data:
-        tipo === "precio"
-          ? {
-              rechazadaPrecio: false,
-              rechazadaPrecioMotivo: null,
-              rechazadaPrecioPorId: null,
-              rechazadaPrecioFecha: null,
-              precioEstado: "PENDIENTE_CONFIRMAR",
-            }
-          : {
-              rechazadaGerencia: false,
-              rechazadaGerenciaMotivo: null,
-              rechazadaGerenciaPorId: null,
-              rechazadaGerenciaFecha: null,
-            },
+      data: { rechazada: false, rechazadaMotivo: null, rechazadaPorId: null, rechazadaFecha: null },
     });
     await registrarAuditoria(
       {
         usuarioId: admin.id,
         entidadTipo: "factura",
         entidadId: facturaId,
-        accion: tipo === "precio" ? "REAPERTURA_RECHAZO_PRECIO" : "REAPERTURA_RECHAZO_GERENCIA",
+        accion: "REAPERTURA_FACTURA_RECHAZADA",
         detalle: motivo,
       },
       tx

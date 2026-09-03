@@ -27,7 +27,7 @@ export function ServicioForm({
   mostrarResponsable = true,
   responsableEditable = true,
   servicioId,
-  precioBloqueado = false,
+  mostrarPrecio = true,
   submitLabel = "Guardar",
 }: {
   action: (state: ActionState, formData: FormData) => Promise<ActionState>;
@@ -39,7 +39,8 @@ export function ServicioForm({
   /** Si el responsable se elige de una lista (admin) o queda fijo en el usuario actual. */
   responsableEditable?: boolean;
   servicioId?: string;
-  precioBloqueado?: boolean;
+  /** El precio solo se carga al proponer el servicio — despues de eso solo cambia via solicitud. */
+  mostrarPrecio?: boolean;
   submitLabel?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -82,24 +83,33 @@ export function ServicioForm({
       <Field label="Descripción" name="descripcion" defaultValue={defaults?.descripcion} required textarea />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-slate-700">Precio vigente (ARS)</label>
-          <input
-            name="precioVigente"
-            type="number"
-            step="0.01"
-            min="0"
-            defaultValue={defaults?.precioVigente}
-            disabled={precioBloqueado}
-            required
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-          />
-          {precioBloqueado && (
-            <p className="text-xs text-amber-700">
-              Bloqueado: hay una excepción de precio abierta para este servicio.
+        {mostrarPrecio ? (
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-slate-700">Precio propuesto (ARS)</label>
+            <input
+              name="precioVigente"
+              type="number"
+              step="0.01"
+              min="0"
+              defaultValue={defaults?.precioVigente}
+              required
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+            <p className="text-xs text-slate-400">
+              Una vez aprobado, solo cambia mediante una solicitud de cambio de precio.
             </p>
-          )}
-        </div>
+          </div>
+        ) : (
+          defaults?.precioVigente != null && (
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-slate-700">Precio vigente (ARS)</label>
+              <div className="rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-600">
+                {defaults.precioVigente}
+              </div>
+              <p className="text-xs text-slate-400">Solo cambia vía una solicitud de cambio de precio.</p>
+            </div>
+          )
+        )}
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-slate-700">Periodicidad</label>
           <select

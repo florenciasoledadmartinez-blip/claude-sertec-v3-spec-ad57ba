@@ -2,15 +2,16 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireRole, hasRole } from "@/lib/dal";
 import { prisma } from "@/lib/db";
-import { tieneExcepcionPrecioAbierta } from "@/lib/excepciones";
-import { getConfigSistema } from "@/lib/config";
-import { cargarFacturasConEstado } from "@/lib/facturas-query";
 import { formatMoneda, formatFecha, formatFechaHora } from "@/lib/format";
 import { periodoLabel } from "@/lib/periodos";
-import { editarServicioAction, darDeBajaServicioAction, reactivarServicioAction } from "@/actions/servicios";
+import {
+  editarServicioAction,
+  darDeBajaServicioAction,
+  reactivarServicioAction,
+  reproponerServicioAction,
+} from "@/actions/servicios";
 import { ServicioForm } from "../servicio-form";
-import { CertificarForm, PeriodoManualForm, AsignarPeriodoForm } from "../prestacion-forms";
-import { ResolverConflictoPrecioForm } from "../../facturas/factura-actions";
+import { CertificarForm, PeriodoManualForm, AsignarPeriodoForm, AjusteImporteForm } from "../prestacion-forms";
 
 const ESTADO_PRESTACION_LABEL: Record<string, string> = {
   PENDIENTE: "Pendiente",
@@ -26,6 +27,20 @@ const ESTADO_PRESTACION_COLOR: Record<string, string> = {
   NO_CUMPLIDO: "bg-red-100 text-red-800",
 };
 
+const ESTADO_SERVICIO_LABEL: Record<string, string> = {
+  PENDIENTE_DE_APROBACION: "Pendiente de aprobación",
+  ACTIVO: "Activo",
+  RECHAZADO: "Rechazado",
+  BAJA: "Dado de baja",
+};
+
+const ESTADO_SERVICIO_COLOR: Record<string, string> = {
+  PENDIENTE_DE_APROBACION: "bg-amber-100 text-amber-800",
+  ACTIVO: "bg-emerald-100 text-emerald-800",
+  RECHAZADO: "bg-red-100 text-red-800",
+  BAJA: "bg-slate-100 text-slate-500",
+};
+
 export default async function ServicioDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireRole("RESPONSABLE_OPERATIVO");
@@ -34,6 +49,7 @@ export default async function ServicioDetailPage({ params }: { params: Promise<{
     where: { id },
     include: {
       responsableOperativo: true,
+      aprobadoPor: true,
       historialPrecio: { orderBy: { fecha: "desc" }, include: { cambiadoPor: true } },
       prestaciones: { orderBy: { periodo: "desc" }, include: { validadoPor: true } },
       facturas: { where: { periodoAConfirmar: true }, include: { registradoPor: true } },
@@ -49,45 +65,86 @@ export default async function ServicioDetailPage({ params }: { params: Promise<{
     orderBy: { nombre: "asc" },
   });
 
-  const precioBloqueado = await tieneExcepcionPrecioAbierta(id);
-
-  const config = await getConfigSistema();
-  const facturasDelServicio = await cargarFacturasConEstado({ servicioId: id });
-  const facturasConflictoPrecio = facturasDelServicio.filter((f) => f.estado === "CONFLICTO_PRECIO");
-  const esResponsableDelServicio = servicio.responsableOperativoId === user.id;
-  const puedeResolverPrecio =
-    hasRole(user, "ADMIN") ||
-    (config.resolutorConflictoPrecio === "RESPONSABLE_OPERATIVO"
-      ? esResponsableDelServicio
-      : hasRole(user, "COMPRAS"));
-
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">{servicio.proveedor}</h1>
+          <div className="mb-1 flex items-center gap-2">
+            <h1 className="text-2xl font-semibold text-slate-900">{servicio.proveedor}</h1>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ESTADO_SERVICIO_COLOR[servicio.estado]}`}>
+              {ESTADO_SERVICIO_LABEL[servicio.estado]}
+            </span>
+          </div>
           <p className="text-slate-500">{servicio.descripcion}</p>
         </div>
-        <form action={servicio.activo ? darDeBajaServicioAction : reactivarServicioAction}>
-          <input type="hidden" name="servicioId" value={servicio.id} />
-          <button
-            type="submit"
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-          >
-            {servicio.activo ? "Dar de baja" : "Reactivar"}
-          </button>
-        </form>
+        <div className="flex gap-2">
+          {servicio.estado === "ACTIVO" && (
+            <>
+              <Link
+                href={`/servicios/${servicio.id}/solicitud-precio`}
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Cambio de precio
+              </Link>
+              <form action={darDeBajaServicioAction}>
+                <input type="hidden" name="servicioId" value={servicio.id} />
+                <button
+                  type="submit"
+                  className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  Dar de baja
+                </button>
+              </form>
+            </>
+          )}
+          {servicio.estado === "BAJA" && (
+            <form action={reactivarServicioAction}>
+              <input type="hidden" name="servicioId" value={servicio.id} />
+              <button
+                type="submit"
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Reactivar
+              </button>
+            </form>
+          )}
+        </div>
       </div>
 
+      {servicio.estado === "PENDIENTE_DE_APROBACION" && (
+        <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          Pendiente de aprobación de Gerencia desde el {formatFecha(servicio.createdAt)}. No genera períodos ni
+          admite facturas hasta que se apruebe.
+        </section>
+      )}
+
+      {servicio.estado === "RECHAZADO" && (
+        <section className="rounded-lg border border-red-200 bg-red-50 p-4">
+          <p className="text-sm text-red-700">
+            Rechazado por {servicio.aprobadoPor?.nombre} el {formatFecha(servicio.fechaAprobacion)}:{" "}
+            {servicio.motivoRechazo}
+          </p>
+          <form action={reproponerServicioAction} className="mt-2">
+            <input type="hidden" name="servicioId" value={servicio.id} />
+            <button
+              type="submit"
+              className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+            >
+              Volver a proponer
+            </button>
+          </form>
+        </section>
+      )}
+
       <section className="rounded-lg border border-slate-200 bg-white p-6">
-        <h2 className="mb-4 font-medium text-slate-900">Condición del servicio</h2>
+        <h2 className="mb-4 font-medium text-slate-900">Datos del servicio</h2>
         <ServicioForm
           action={editarServicioAction}
           responsables={responsables}
           currentUserId={user.id}
           mostrarResponsable={false}
+          mostrarPrecio={false}
           servicioId={servicio.id}
-          precioBloqueado={precioBloqueado}
           submitLabel="Guardar cambios"
           defaults={{
             proveedor: servicio.proveedor,
@@ -126,47 +183,17 @@ export default async function ServicioDetailPage({ params }: { params: Promise<{
         </section>
       )}
 
-      {facturasConflictoPrecio.length > 0 && (
-        <section className="rounded-lg border border-amber-200 bg-amber-50 p-6">
-          <h2 className="mb-1 font-medium text-slate-900">
-            Facturas con conflicto de precio ({facturasConflictoPrecio.length})
-          </h2>
-          <p className="mb-3 text-sm text-slate-600">
-            {puedeResolverPrecio
-              ? "El importe facturado no coincide con el precio acordado. Resolvé acá mismo."
-              : `Según la configuración, esto lo resuelve ${
-                  config.resolutorConflictoPrecio === "COMPRAS" ? "Compras" : "el responsable operativo"
-                }.`}
-          </p>
-          <div className="flex flex-col gap-4">
-            {facturasConflictoPrecio.map((f) => (
-              <div key={f.id} className="rounded-md border border-amber-200 bg-white p-3">
-                <div className="mb-2 text-sm text-slate-700">
-                  <Link href={`/facturas/${f.id}`} className="font-medium hover:underline">
-                    Factura {f.numeroFactura}
-                  </Link>{" "}
-                  del {formatFecha(f.fechaFactura)} — facturado {formatMoneda(f.importeFacturado)} vs. precio
-                  vigente {formatMoneda(servicio.precioVigente)}
-                  {f.periodos.length > 1 ? ` × ${f.periodos.length} períodos` : ""}
-                </div>
-                {puedeResolverPrecio && (
-                  <ResolverConflictoPrecioForm facturaId={f.id} precioVigente={Number(servicio.precioVigente)} />
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
       <section className="rounded-lg border border-slate-200 bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-medium text-slate-900">
             Períodos ({periodoLabel(servicio.periodicidad)})
           </h2>
         </div>
-        <div className="mb-4">
-          <PeriodoManualForm servicioId={servicio.id} />
-        </div>
+        {servicio.estado === "ACTIVO" && (
+          <div className="mb-4">
+            <PeriodoManualForm servicioId={servicio.id} />
+          </div>
+        )}
         <div className="flex flex-col gap-3">
           {servicio.prestaciones.map((p) => (
             <div key={p.id} className="rounded-md border border-slate-200 p-3">
@@ -189,14 +216,23 @@ export default async function ServicioDetailPage({ params }: { params: Promise<{
                 )}
               </div>
               {p.observacion && <p className="mt-2 text-sm text-slate-600">{p.observacion}</p>}
-              {p.resolucionParcialTipo && (
-                <p className="mt-2 rounded-md bg-slate-50 p-2 text-xs text-slate-600">
-                  Resolución de Compras: {p.resolucionParcialTipo} — {p.resolucionParcialDetalle}
-                </p>
-              )}
               {p.estado === "PENDIENTE" && (
                 <div className="mt-3">
                   <CertificarForm prestacionId={p.id} />
+                </div>
+              )}
+              {p.estado === "PARCIAL" && (
+                <div className="mt-3">
+                  {p.importeEsperadoAjustado != null && (
+                    <p className="mb-2 text-sm text-slate-600">
+                      Importe esperado ajustado: <strong>{formatMoneda(p.importeEsperadoAjustado)}</strong> (se
+                      compara la factura contra este importe, no contra el precio completo)
+                    </p>
+                  )}
+                  <AjusteImporteForm
+                    prestacionId={p.id}
+                    importeActual={p.importeEsperadoAjustado != null ? Number(p.importeEsperadoAjustado) : null}
+                  />
                 </div>
               )}
             </div>
@@ -216,7 +252,7 @@ export default async function ServicioDetailPage({ params }: { params: Promise<{
               <th className="py-2">Anterior</th>
               <th className="py-2">Nuevo</th>
               <th className="py-2">Motivo</th>
-              <th className="py-2">Cambiado por</th>
+              <th className="py-2">Aprobado por</th>
             </tr>
           </thead>
           <tbody>

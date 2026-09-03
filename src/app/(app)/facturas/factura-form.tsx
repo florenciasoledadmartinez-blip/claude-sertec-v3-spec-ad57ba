@@ -18,12 +18,15 @@ type Defaults = {
   periodoIds?: string[];
 };
 
+type AnticipoDisponible = { id: string; proveedor: string; numeroProforma: string; monto: number };
+
 export function FacturaForm({
   servicios,
   action,
   facturaId,
   defaults,
   servicioFijo,
+  anticiposDisponibles = [],
   submitLabel = "Registrar factura",
   submitLabelPendiente = "Registrando...",
 }: {
@@ -33,6 +36,8 @@ export function FacturaForm({
   defaults?: Defaults;
   /** Si se pasa, el servicio queda fijo (modo edicion) y no se puede elegir otro. */
   servicioFijo?: { id: string; proveedor: string; descripcion: string };
+  /** Anticipos pagados y sin aplicar (categoria C) que se pueden vincular a esta factura. */
+  anticiposDisponibles?: AnticipoDisponible[];
   submitLabel?: string;
   submitLabelPendiente?: string;
 }) {
@@ -181,6 +186,30 @@ export function FacturaForm({
           </div>
         )}
       </div>
+
+      {anticiposDisponibles.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-md border border-slate-200 p-3">
+          <label className="text-sm font-medium text-slate-700">
+            Aplicar un anticipo ya pagado (opcional — categoría C)
+          </label>
+          <select name="anticipoId" defaultValue="" className="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <option value="">Ninguno</option>
+            {anticiposDisponibles.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.proveedor} — proforma {a.numeroProforma} — {a.monto}
+              </option>
+            ))}
+          </select>
+          <select
+            name="varianteAplicacionAnticipo"
+            defaultValue="SALDO_RESTANTE"
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          >
+            <option value="SALDO_RESTANTE">La factura viene por el saldo restante</option>
+            <option value="TOTAL_CON_CREDITO">La factura viene por el total, se descuenta el anticipo</option>
+          </select>
+        </div>
+      )}
 
       {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
       {state?.warning && (

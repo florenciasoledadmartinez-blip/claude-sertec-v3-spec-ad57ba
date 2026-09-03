@@ -44,3 +44,9 @@ export function diasHabilesTranscurridos(desde: Date, hasta: Date = new Date()) 
   }
   return dias;
 }
+
+/** Dias corridos (no habiles) — usado para el seguimiento de anticipos (spec 4.4: 15 dias corridos). */
+export function diasCorridosTranscurridos(desde: Date, hasta: Date = new Date()) {
+  const ms = hasta.getTime() - new Date(desde).getTime();
+  return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
+}

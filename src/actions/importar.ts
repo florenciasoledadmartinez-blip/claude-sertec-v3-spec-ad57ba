@@ -67,10 +67,13 @@ export async function importarDatosAction(_prev: ActionState, formData: FormData
     await tx.facturaPeriodo.deleteMany({});
     await tx.factura.deleteMany({});
     await tx.prestacion.deleteMany({});
+    await tx.solicitudCambioPrecio.deleteMany({});
     await tx.historialPrecio.deleteMany({});
     await tx.servicio.deleteMany({});
 
     for (const s of parsed.data) {
+      // Se importan como servicios reales ya vigentes: quedan ACTIVO directamente, sin pasar
+      // por la cola de aprobación (esa cola es para altas nuevas propuestas desde la app).
       await tx.servicio.create({
         data: {
           proveedor: s.proveedor,
@@ -84,6 +87,9 @@ export async function importarDatosAction(_prev: ActionState, formData: FormData
           actualizacionBase: s.actualizacionBase || null,
           vigenteDesde: new Date(s.vigenteDesde),
           duracionEnPeriodos: s.duracionEnPeriodos ?? null,
+          estado: "ACTIVO",
+          aprobadoPorId: admin.id,
+          fechaAprobacion: new Date(),
         },
       });
     }
