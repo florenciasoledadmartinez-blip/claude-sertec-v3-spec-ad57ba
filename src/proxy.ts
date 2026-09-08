@@ -23,5 +23,8 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  // Ademas de los excluidos de siempre, deja pasar sin auth cualquier archivo estatico servido
+  // desde /public (logo, iconos, etc.) — si no, el logo del login nunca carga para quien todavia
+  // no inicio sesion, porque el middleware lo redirige a /login antes de servir el archivo.
+  matcher: ["/((?!api|_next/static|_next/image|favicon\\.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico)$).*)"],
 };
