@@ -161,9 +161,18 @@ export default async function FacturaDetailPage({ params }: { params: Promise<{ 
             `El importe no coincide con lo esperado (${formatMoneda(factura.importeEsperado)}).`}
         </p>
 
-        {hasRole(user, "ANALISTA_CXP") && factura.precioEstado === "PENDIENTE_CONFIRMAR" && !factura.periodoAConfirmar && (
+        {hasRole(user, "ANALISTA_CXP") && factura.estado === "PARA_CONFIRMAR_PRECIO" && (
           <ConfirmarPrecioButton facturaId={factura.id} />
         )}
+        {hasRole(user, "ANALISTA_CXP") &&
+          factura.precioEstado === "PENDIENTE_CONFIRMAR" &&
+          factura.estado !== "PARA_CONFIRMAR_PRECIO" &&
+          !factura.periodoAConfirmar && (
+            <p className="text-sm text-amber-700">
+              Todavía no se puede confirmar el precio: primero hay que resolver la prestación de este período
+              (arriba).
+            </p>
+          )}
 
         {factura.estado === "CONFLICTO_PRECIO" && (
           <div className="flex flex-col gap-3">

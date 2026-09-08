@@ -6,6 +6,8 @@ import { prisma } from "@/lib/db";
 import { requireRole, hasRole } from "@/lib/dal";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { ServicioSchema, ServicioEdicionSchema, CertificacionSchema, SolicitudPrecioSchema } from "@/lib/validations";
+import { periodoInicioFecha } from "@/lib/periodos";
+import { formatFecha } from "@/lib/format";
 
 export type ActionState =
   | { error?: string; success?: string; warning?: string; valores?: Record<string, unknown> }
@@ -295,12 +297,21 @@ export async function crearPeriodoManualAction(_prev: ActionState, formData: For
   const periodo = String(formData.get("periodo") ?? "").trim();
   if (!periodo) return { error: "Ingresá la etiqueta del período." };
 
-  const { user } = await assertResponsableDelServicio(servicioId);
+  const { user, servicio } = await assertResponsableDelServicio(servicioId);
 
   const existente = await prisma.prestacion.findUnique({
     where: { servicioId_periodo: { servicioId, periodo } },
   });
   if (existente) return { error: "Ya existe un período con esa etiqueta para este servicio." };
+
+  const inicioPeriodo = periodoInicioFecha(servicio.periodicidad, periodo);
+  if (inicioPeriodo && inicioPeriodo < servicio.vigenteDesde) {
+    return {
+      error: `Este período es anterior a la vigencia del servicio (desde ${formatFecha(
+        servicio.vigenteDesde
+      )}) — no se puede certificar un período previo a que el servicio empezara a regir.`,
+    };
+  }
 
   const prestacion = await prisma.prestacion.create({
     data: { servicioId, periodo, creadoManualmente: true },

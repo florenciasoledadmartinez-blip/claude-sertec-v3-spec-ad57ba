@@ -7,7 +7,7 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/dal";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { FacturaSchema } from "@/lib/validations";
-import { calcularImporteEsperado, facturaConDatosInclude } from "@/lib/facturas-query";
+import { calcularImporteEsperado, cargarFacturaConEstado } from "@/lib/facturas-query";
 import type { ActionState } from "@/actions/servicios";
 
 /** Periodos elegidos que ya tienen otra factura asociada (alerta, no bloqueo). */
@@ -253,12 +253,12 @@ export async function eliminarFacturaAction(_prev: ActionState, formData: FormDa
 export async function confirmarPrecioAction(facturaId: string) {
   const user = await requireRole("ANALISTA_CXP");
 
-  const factura = await prisma.factura.findUnique({
-    where: { id: facturaId },
-    include: facturaConDatosInclude,
-  });
+  const factura = await cargarFacturaConEstado(facturaId);
   if (!factura) return;
-  if (factura.periodoAConfirmar) return;
+  // El estado computado ya exige que la prestación esté resuelta (Cumplido, o Parcial con
+  // importe ajustado cargado) antes de habilitar el control de precio — si el período está
+  // Pendiente, No cumplido, o Parcial sin ajustar, esto corta acá y no confirma nada.
+  if (factura.estado !== "PARA_CONFIRMAR_PRECIO") return;
 
   const esperado = calcularImporteEsperado(factura);
   const coincide = esperado.equals(factura.importeFacturado);

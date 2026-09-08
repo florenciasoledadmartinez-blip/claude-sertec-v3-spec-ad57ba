@@ -82,6 +82,58 @@ const PASOS_C = [
   },
 ];
 
+const EXCEPCIONES = [
+  {
+    estado: "Período a confirmar",
+    color: "bg-amber-100 text-amber-800",
+    significa: "La factura llegó pero no está claro a qué período corresponde (puede pasar si el proveedor facturó tarde, o junto dos períodos).",
+    quien: "Responsable operativo del servicio",
+    como: "Desde la factura, elige a qué período (ya generado) corresponde.",
+  },
+  {
+    estado: "Pendiente de validar prestación",
+    color: "bg-amber-100 text-amber-800",
+    significa: "El período todavía está \"Pendiente\": nadie certificó si el servicio se prestó, aunque ya haya una factura registrada contra él.",
+    quien: "Responsable operativo del servicio",
+    como: "Certifica el período como Cumplido, Parcial o No cumplido (Mis servicios → el servicio → Períodos).",
+  },
+  {
+    estado: "Pendiente de ajuste del proveedor",
+    color: "bg-amber-100 text-amber-800",
+    significa: "El responsable certificó el período como \"Parcial\" (se cumplió a medias) pero todavía no cargó cuánto se acordó facturar por esa prestación parcial.",
+    quien: "Responsable operativo del servicio",
+    como: "Carga el importe esperado ajustado — la factura se compara contra ese número, no contra el precio completo.",
+  },
+  {
+    estado: "Conflicto — precio no coincide",
+    color: "bg-rose-100 text-rose-800",
+    significa: "El importe facturado no coincide con el importe esperado (precio vigente, o el importe ajustado si el período fue Parcial).",
+    quien: "Analista de Cuentas a Pagar, y si hace falta Gerencia",
+    como: "El Analista gestiona la corrección directo con el proveedor (editar factura). Si no llega a tiempo, pide una autorización excepcional puntual y la resuelve Gerencia — conceder no cambia el precio del servicio, solo habilita esa factura puntual.",
+  },
+  {
+    estado: "Conflicto — excede el presupuesto",
+    color: "bg-rose-100 text-rose-800",
+    significa: "El servicio tiene activo el control de presupuesto de contrato (duración en períodos) y esta factura haría superar el saldo disponible.",
+    quien: "Responsable operativo del servicio",
+    como: "Revisa el contrato con el proveedor — el presupuesto es una duración fija pactada, no se extiende solo.",
+  },
+  {
+    estado: "Bloqueada — no se prestó el servicio",
+    color: "bg-slate-200 text-slate-700",
+    significa: "El responsable certificó el período como \"No cumplido\": el servicio no se prestó ese período. Es distinto a los de arriba — acá no hay nada que ajustar, la factura queda frenada.",
+    quien: "Administrador (reabrir el período) o Responsable operativo (recertificar)",
+    como: "Si fue un error de carga, el Administrador reabre el período desde Períodos bloqueados. Si el servicio efectivamente no se prestó, la factura no debería pagarse.",
+  },
+  {
+    estado: "Rechazada",
+    color: "bg-red-100 text-red-800",
+    significa: "Gerencia decidió no pagar esta factura y dejó un motivo. Es una decisión terminal, no un \"pendiente\" — si solo se quiere postergar unos días, mejor no tocar la factura y dejarla esperando en la cola.",
+    quien: "Administrador",
+    como: "Se reabre desde Administrador → Facturas rechazadas, con motivo — queda registrado en la auditoría.",
+  },
+];
+
 export default function InstructivoPage() {
   return (
     <div className="flex flex-col gap-8">
@@ -143,6 +195,33 @@ export default function InstructivoPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div>
+        <h2 className="mb-1 text-lg font-medium text-slate-900">Excepciones y bloqueos: qué significa cada uno</h2>
+        <p className="mb-3 text-sm text-slate-500">
+          Una &quot;factura bloqueada&quot; es cualquier factura que todavía no puede avanzar hacia el pago. El
+          motivo puede ser distinto en cada caso, y por eso cada uno lo resuelve una persona distinta — nunca es
+          el Analista quien resuelve todo.
+        </p>
+        <div className="flex flex-col gap-3">
+          {EXCEPCIONES.map((e) => (
+            <div key={e.estado} className="rounded-lg border border-slate-200 bg-white p-4">
+              <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${e.color}`}>
+                {e.estado}
+              </span>
+              <p className="mt-2 text-sm text-slate-600">{e.significa}</p>
+              <p className="mt-2 text-sm">
+                <span className="font-medium text-slate-800">Lo resuelve: </span>
+                <span className="text-slate-600">{e.quien}</span>
+              </p>
+              <p className="mt-1 text-sm">
+                <span className="font-medium text-slate-800">Cómo: </span>
+                <span className="text-slate-600">{e.como}</span>
+              </p>
+            </div>
+          ))}
         </div>
       </div>
 

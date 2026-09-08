@@ -53,12 +53,22 @@ export default async function DashboardPage() {
       ].includes(f.estado)
     ).length;
     const paraConfirmarPrecio = facturas.filter((f) => f.estado === "PARA_CONFIRMAR_PRECIO").length;
-    const anticiposSinAplicar = await prisma.anticipo.count({ where: { aplicado: false } });
+    const [anticiposSinAplicar, prestadosSinFactura] = await Promise.all([
+      prisma.anticipo.count({ where: { aplicado: false } }),
+      prisma.prestacion.count({
+        where: { estado: "CUMPLIDO", servicio: { estado: "ACTIVO" }, facturaPeriodos: { none: {} } },
+      }),
+    ]);
     grupos.push({
       role: "ANALISTA_CXP",
       items: [
         { label: "Facturas bloqueadas", count: bloqueadas, href: "/facturas/bloqueadas" },
         { label: "Para confirmar precio", count: paraConfirmarPrecio, href: "/facturas?estado=PARA_CONFIRMAR_PRECIO" },
+        {
+          label: "Servicio ya prestado, factura sin registrar",
+          count: prestadosSinFactura,
+          href: "/facturas/pendientes-registro",
+        },
         { label: "Anticipos sin aplicar", count: anticiposSinAplicar, href: "/anticipos" },
       ],
     });

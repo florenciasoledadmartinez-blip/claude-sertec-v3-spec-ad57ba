@@ -15,6 +15,7 @@ export const NAV_BY_ROLE: Record<RoleName, { href: string; label: string }[]> = 
     { href: "/facturas", label: "Facturas" },
     { href: "/facturas/nueva", label: "Registrar factura" },
     { href: "/facturas/bloqueadas", label: "Bloqueadas" },
+    { href: "/facturas/pendientes-registro", label: "Prestado sin factura" },
     { href: "/facturas/por-proveedor", label: "Por proveedor" },
     { href: "/anticipos", label: "Anticipos" },
     { href: "/reportes/excepciones", label: "Rep. excepciones" },
